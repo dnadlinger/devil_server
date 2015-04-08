@@ -7,7 +7,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra -Wpedantic")
 endif()
 
+# This Boost version is simply the oldest tested one. If your system has a
+# different one, go ahead and change this, but be sure to thoroughly test the
+# software afterwards.
 find_package(Boost 1.57.0 REQUIRED log system)
+
 find_package(ZeroMQ 4.0 REQUIRED)
 
 # Boost.Asio fails to recognize std::chrono as working with GCC 4.9, yet it
