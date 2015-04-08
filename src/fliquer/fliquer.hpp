@@ -86,7 +86,7 @@ public:
         std::function<void(const std::vector<RemoteResource> &)>;
 
     Node(boost::asio::io_service &ioService,
-         NewRemoteResourceCallback newRemoteResourceCallback,
+         NewRemoteResourceCallback newRemoteResourceCallback = nullptr,
          uint16_t port = 8474);
 
     void start();
