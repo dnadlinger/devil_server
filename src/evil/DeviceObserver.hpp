@@ -43,6 +43,8 @@ private:
 
     void handleDeviceEvent(udev_device *dev);
 
+    void invokeIfMatch(DeviceCallback callback, udev_device *dev);
+
     DeviceCallback addCallback_;
     DeviceCallback removeCallback_;
 

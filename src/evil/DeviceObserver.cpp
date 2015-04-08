@@ -37,7 +37,31 @@ DeviceObserver::~DeviceObserver() {
     udev_unref(udev_);
 }
 
-void DeviceObserver::start() { receiveEvent(); }
+void DeviceObserver::start() {
+    if (addCallback_) {
+        auto e = udev_enumerate_new(udev_);
+        assert(e && "Failed to create udev enumeration context.");
+
+        auto ec = udev_enumerate_add_match_subsystem(
+            e, target_device::subsystem.c_str());
+        assert(!ec && "Failed to add subsystem filter.");
+
+        ec = udev_enumerate_scan_devices(e);
+        assert(!ec && "Failed to scan devices.");
+
+        auto firstDevEntry = udev_enumerate_get_list_entry(e);
+        udev_list_entry *devEntry;
+        udev_list_entry_foreach(devEntry, firstDevEntry) {
+            auto path = udev_list_entry_get_name(devEntry);
+            auto dev = udev_device_new_from_syspath(udev_, path);
+            invokeIfMatch(addCallback_, dev);
+        }
+
+        udev_enumerate_unref(e);
+    }
+
+    receiveEvent();
+}
 
 void DeviceObserver::receiveEvent() {
     auto self = shared_from_this();
@@ -61,21 +85,29 @@ void DeviceObserver::handleDeviceEvent(udev_device *dev) {
     }
     if (!handler) return;
 
+    invokeIfMatch(handler, dev);
+}
+
+void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
     for (const auto &filter : target_device::properties) {
         auto p = udev_device_get_property_value(dev, filter.first);
 
         if (!p) p = "<null>";
 
         if (p != filter.second) {
-            BOOST_LOG(log_) << "Ignoring " << target_device::subsystem
-                            << " device event due to " << filter.first
-                            << " mismatch: " << p << ", but expected "
-                            << filter.second;
+            if (filter.first != "ID_BUS"s) {
+                // Do not log mismatch for ID_BUS, as this leads to a lot of
+                // spew due to all the fixed virtual terminals.
+                BOOST_LOG(log_) << "Ignoring " << target_device::subsystem
+                                << " device event as " << filter.first << " is "
+                                << p << ", but target device has "
+                                << filter.second;
+            }
             return;
         }
     }
 
-    handler(udev_device_get_devnode(dev),
-            udev_device_get_property_value(dev, "ID_SERIAL_SHORT"));
+    callback(udev_device_get_devnode(dev),
+             udev_device_get_property_value(dev, "ID_SERIAL_SHORT"));
 }
 }
