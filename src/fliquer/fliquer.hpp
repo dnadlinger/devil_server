@@ -83,29 +83,24 @@ enum { maxUdpPacketSize = 65507 };
 class Node : public std::enable_shared_from_this<Node> {
 public:
     using NewRemoteResourceCallback =
-        std::function<void(const RemoteResource &)>;
+        std::function<void(const std::vector<RemoteResource> &)>;
 
     Node(boost::asio::io_service &ioService,
          NewRemoteResourceCallback newRemoteResourceCallback,
          uint16_t port = 8474);
 
-    void start() { receiveUdpPacket(); }
+    void start();
+    void stop();
 
     void addLocalResource(const Resource &resource);
-
     bool removeLocalResource(const Resource &resource);
 
-    using RemoteResourcesCallback =
-        std::function<void(const std::vector<RemoteResource> &)>;
-    void enumerateRemoteResources(std::chrono::seconds timeout,
-                                  RemoteResourcesCallback callback);
-
 private:
+    void broadcastEnumerationRequest();
     void receiveUdpPacket();
     void actOnUdpPacket(size_t sizeBytes);
     void replyWithLocalResources();
 
-    boost::asio::io_service &ioService_;
     NewRemoteResourceCallback newRemoteResourceCallback_;
     uint16_t port_;
 
