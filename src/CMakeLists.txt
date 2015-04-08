@@ -1,4 +1,8 @@
+add_subdirectory(evil)
 add_subdirectory(fliquer)
+
+add_executable(evil_observe_devices evil_observe_devices.cpp)
+target_link_libraries(evil_observe_devices evil ${Boost_LIBRARIES} udev)
 
 add_executable(fliquer_observe fliquer_observe.cpp)
 target_link_libraries(fliquer_observe fliquer ${Boost_LIBRARIES})
