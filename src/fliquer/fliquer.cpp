@@ -24,9 +24,13 @@ Node::Node(io_service &ioService,
            Node::NewRemoteResourceCallback newRemoteResourceCallback,
            uint16_t port)
     : newRemoteResourceCallback_{newRemoteResourceCallback}, port_{port},
-      udpSocket_{ioService, ip::udp::endpoint(ip::udp::v4(), port)} {
+      udpSocket_{ioService} {
+    // We need to set reuse_address before binding the socket, but for this it
+    // already needs to be open. Thus, we explicitly need to call open().
+    udpSocket_.open(ip::udp::v4());
     udpSocket_.set_option(ip::udp::socket::reuse_address(true));
     udpSocket_.set_option(socket_base::broadcast(true));
+    udpSocket_.bind(ip::udp::endpoint(ip::udp::v4(), port));
 }
 
 void Node::start() {
