@@ -161,6 +161,9 @@ void Node::actOnUdpPacket(size_t sizeBytes) {
 }
 
 void Node::replyWithLocalResources() {
+    // No need sending an empty resource packet.
+    if (localResources_.empty()) return;
+
     auto buf = std::make_shared<msgpack::sbuffer>();
 
     using Msg = msgpack::type::tuple<unsigned, std::string,
