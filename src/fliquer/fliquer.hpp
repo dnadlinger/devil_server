@@ -18,9 +18,9 @@
 namespace fliquer {
 
 struct SemVer {
-    unsigned major;
-    unsigned minor;
-    unsigned patch;
+    unsigned major = 0;
+    unsigned minor = 0;
+    unsigned patch = 0;
     std::string preRelease;
     std::string buildMetadata;
 
