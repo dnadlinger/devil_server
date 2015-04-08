@@ -10,7 +10,13 @@ endif()
 find_package(Boost 1.57.0 REQUIRED log system)
 find_package(ZeroMQ 4.0 REQUIRED)
 
-add_definitions(-DBOOST_ASIO_HAS_STD_CHRONO -DBOOST_ALL_DYN_LINK)
+# Boost.Asio fails to recognize std::chrono as working with GCC 4.9, yet it
+# seems to work fine for our purposes.
+add_definitions(-DBOOST_ASIO_HAS_STD_CHRONO)
+
+# This is a hack to get the Boost code properly on Linux distributions that ship
+# Boost as a shared library. Should probably be auto-detected somehow.
+add_definitions(-DBOOST_ALL_DYN_LINK)
 
 include_directories(SYSTEM lib/azmq lib/msgpack)
 
