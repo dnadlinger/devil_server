@@ -1,8 +1,6 @@
 #include <iostream>
-#include "boost/asio.hpp"
+#include "boost/asio/io_service.hpp"
 #include "fliquer/fliquer.hpp"
-
-using namespace std::literals;
 
 int main() {
     boost::asio::io_service io;
