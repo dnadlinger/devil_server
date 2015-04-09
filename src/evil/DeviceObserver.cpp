@@ -63,10 +63,17 @@ void DeviceObserver::start() {
     receiveEvent();
 }
 
+void DeviceObserver::stop() { udevStream_.close(); }
+
 void DeviceObserver::receiveEvent() {
     auto self = shared_from_this();
     udevStream_.async_read_some(
-        null_buffers(), [this, self](const error_code &, size_t) {
+        null_buffers(), [this, self](const error_code &ec, size_t) {
+            if (ec == errc::bad_file_descriptor) {
+                // stop() has been called, exit callback chain.
+                return;
+            }
+
             auto dev = udev_monitor_receive_device(udevMonitor_);
             handleDeviceEvent(dev);
             udev_device_unref(dev);
@@ -78,6 +85,7 @@ void DeviceObserver::receiveEvent() {
 void DeviceObserver::handleDeviceEvent(udev_device *dev) {
     DeviceCallback handler = nullptr;
     const auto action = udev_device_get_action(dev);
+    if (!action) return;
     if (action == "add"s) {
         handler = addCallback_;
     } else if (action == "remove"s) {

@@ -62,6 +62,12 @@ void Node::addLocalResource(const Resource &resource) {
     udpSocket_.async_send_to(buffer(buf->data(), buf->size()), broadcast,
                              [this, self, buf](const error_code &err, size_t) {
                                  if (err) {
+                                     if (err == errc::bad_file_descriptor) {
+                                         // The socket has been closed by
+                                         // stop(), exit the callback
+                                         // chain.
+                                         return;
+                                     }
                                      BOOST_LOG(log_)
                                          << "Failed to send broadcast: " << err;
                                  }
@@ -91,6 +97,11 @@ void Node::broadcastEnumerationRequest() {
         buffer(requestBuf->data(), requestBuf->size()), broadcast,
         [this, self, requestBuf](const error_code &err, size_t) {
             if (err) {
+                if (err == errc::bad_file_descriptor) {
+                    // The socket has been closed by stop(), exit the callback
+                    // chain.
+                    return;
+                }
                 BOOST_LOG(log_) << "Failed to send broadcast: " << err.message()
                                 << " (" << err << ")";
             }
@@ -103,6 +114,11 @@ void Node::receiveUdpPacket() {
         buffer(receiveBuf_.data(), receiveBuf_.size()), receiveSender_,
         [this, self](const error_code &err, size_t receivedBytes) {
             if (err) {
+                if (err == errc::bad_file_descriptor) {
+                    // The socket has been closed by stop(), exit the callback
+                    // chain.
+                    return;
+                }
                 BOOST_LOG(log_) << "Error while receiving UDP packet: " << err;
             } else {
                 actOnUdpPacket(receivedBytes);
@@ -174,6 +190,12 @@ void Node::replyWithLocalResources() {
     udpSocket_.async_send_to(buffer(buf->data(), buf->size()), receiveSender_,
                              [this, self, buf](const error_code &err, size_t) {
                                  if (err) {
+                                     if (err == errc::bad_file_descriptor) {
+                                         // The socket has been closed by
+                                         // stop(), exit the callback
+                                         // chain.
+                                         return;
+                                     }
                                      BOOST_LOG(log_)
                                          << "Failed to send reply: " << err;
                                  }
