@@ -10,7 +10,7 @@ endif()
 # This Boost version is simply the oldest tested one. If your system has a
 # different one, go ahead and change this, but be sure to thoroughly test the
 # software afterwards.
-find_package(Boost 1.57.0 REQUIRED log system)
+find_package(Boost 1.57.0 REQUIRED filesystem log system)
 
 find_package(ZeroMQ 4.0 REQUIRED)
 
@@ -21,6 +21,9 @@ add_definitions(-DBOOST_ASIO_HAS_STD_CHRONO)
 # This is a hack to get the Boost code properly on Linux distributions that ship
 # Boost as a shared library. Should probably be auto-detected somehow.
 add_definitions(-DBOOST_ALL_DYN_LINK)
+
+# We don't want to actually use deprecated Boost.Filesystem features
+add_definitions(-DBOOST_FILESYSTEM_NO_DEPRECATED)
 
 include_directories(SYSTEM lib/azmq lib/msgpack)
 

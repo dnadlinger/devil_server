@@ -1,1 +1,1 @@
-add_library(evil DeviceObserver.cpp)
+add_library(evil DeviceObserver.cpp Server.cpp)
