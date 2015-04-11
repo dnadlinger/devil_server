@@ -103,6 +103,8 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
         if (!p) p = "<null>";
 
         if (p != filter.second) {
+            // Log why we ignored a device event for helping people to debug why
+            // their controller was not recognized.
             if (filter.first != "ID_BUS"s) {
                 // Do not log mismatch for ID_BUS, as this leads to a lot of
                 // spew due to all the fixed virtual terminals.
