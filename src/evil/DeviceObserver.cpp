@@ -115,7 +115,9 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
         }
     }
 
-    callback(udev_device_get_devnode(dev),
-             udev_device_get_property_value(dev, "ID_SERIAL_SHORT"));
+    auto serial = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
+    if (!serial) serial = "<no serial #>";
+
+    callback(udev_device_get_devnode(dev), serial);
 }
 }
