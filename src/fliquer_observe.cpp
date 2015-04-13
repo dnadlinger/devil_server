@@ -5,7 +5,7 @@
 int main() {
     boost::asio::io_service io;
 
-    auto node = std::make_shared<fliquer::Node>(
+    auto node = fliquer::Node::make(
         io, [](const std::vector<fliquer::RemoteResource> &rrs) {
             for (const auto &rr : rrs) {
                 const auto &addr = rr.first;

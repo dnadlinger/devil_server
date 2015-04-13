@@ -10,12 +10,13 @@ endif()
 # This Boost version is simply the oldest tested one. If your system has a
 # different one, go ahead and change this, but be sure to thoroughly test the
 # software afterwards.
-find_package(Boost 1.57.0 REQUIRED filesystem log system)
+find_package(Boost 1.57.0 REQUIRED coroutine filesystem log regex system)
 
 find_package(ZeroMQ 4.0 REQUIRED)
 
-# Boost.Asio fails to recognize std::chrono as working with GCC 4.9, yet it
-# seems to work fine for our purposes.
+# Boost.Asio fails to recognize std::array and std::chrono as working with
+# GCC 4.9, yet it seems to work fine for our purposes.
+add_definitions(-DBOOST_ASIO_HAS_STD_ARRAY)
 add_definitions(-DBOOST_ASIO_HAS_STD_CHRONO)
 
 # This is a hack to get the Boost code properly on Linux distributions that ship

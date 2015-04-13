@@ -27,9 +27,16 @@ const std::vector<std::pair<const char *, std::string>> properties = {
 
 class DeviceObserver : public std::enable_shared_from_this<DeviceObserver> {
 public:
-    using DeviceCallback = std::function<void(std::string, std::string)>;
-    DeviceObserver(boost::asio::io_service &ioService,
-                   DeviceCallback addCallback, DeviceCallback removeCallback);
+    using DeviceCallback =
+        std::function<void(const std::string &, const std::string &)>;
+
+    static std::shared_ptr<DeviceObserver>
+    make(boost::asio::io_service &ioService, DeviceCallback addCallback,
+         DeviceCallback removeCallback) {
+        return std::shared_ptr<DeviceObserver>(
+            new DeviceObserver(ioService, addCallback, removeCallback));
+    }
+
     ~DeviceObserver();
 
     DeviceObserver(const DeviceObserver &) = delete;
@@ -39,6 +46,9 @@ public:
     void stop();
 
 private:
+    DeviceObserver(boost::asio::io_service &ioService,
+                   DeviceCallback addCallback, DeviceCallback removeCallback);
+
     void receiveEvent();
 
     void handleDeviceEvent(udev_device *dev);

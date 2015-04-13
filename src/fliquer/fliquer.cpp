@@ -114,7 +114,8 @@ void Node::receiveUdpPacket() {
         buffer(receiveBuf_.data(), receiveBuf_.size()), receiveSender_,
         [this, self](const error_code &err, size_t receivedBytes) {
             if (err) {
-                if (err == errc::bad_file_descriptor) {
+                if (err == errc::bad_file_descriptor ||
+                    err == errc::operation_canceled) {
                     // The socket has been closed by stop(), exit the callback
                     // chain.
                     return;
@@ -133,16 +134,16 @@ void Node::actOnUdpPacket(size_t sizeBytes) {
 
         using Msg =
             msgpack::type::tuple<unsigned, std::string, msgpack::object>;
-        auto msg = unp.get().as<Msg>();
+        const auto msg = unp.get().as<Msg>();
 
-        auto type = msg.get<0>();
+        const auto type = msg.get<0>();
         if (type != msgType) {
             BOOST_LOG(log_)
                 << "Malformed UDP packet received: Invalid type: " << type;
             return;
         }
 
-        auto method = msg.get<1>();
+        const auto method = msg.get<1>();
         if (method == methods::enumerate) {
             replyWithLocalResources();
         } else if (method == methods::resources) {

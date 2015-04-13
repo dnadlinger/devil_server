@@ -5,7 +5,7 @@
 int main() {
     boost::asio::io_service io;
 
-    auto node = std::make_shared<fliquer::Node>(io, nullptr);
+    auto node = fliquer::Node::make(io);
 
     node->start();
 

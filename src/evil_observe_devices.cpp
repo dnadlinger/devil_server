@@ -5,7 +5,7 @@
 int main() {
     boost::asio::io_service io;
 
-    auto observer = std::make_shared<evil::DeviceObserver>(
+    auto observer = evil::DeviceObserver::make(
         io,
         [](auto path, auto serial) {
             std::cout << " :: Device plugged in: " << path

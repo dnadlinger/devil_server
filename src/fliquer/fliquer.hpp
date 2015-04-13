@@ -85,9 +85,13 @@ public:
     using NewRemoteResourceCallback =
         std::function<void(const std::vector<RemoteResource> &)>;
 
-    Node(boost::asio::io_service &ioService,
+    static std::shared_ptr<Node>
+    make(boost::asio::io_service &ioService,
          NewRemoteResourceCallback newRemoteResourceCallback = nullptr,
-         uint16_t port = 8474);
+         uint16_t port = 8474) {
+        return std::shared_ptr<Node>(
+            new Node(ioService, newRemoteResourceCallback, port));
+    }
 
     void start();
     void stop();
@@ -96,6 +100,9 @@ public:
     bool removeLocalResource(const Resource &resource);
 
 private:
+    Node(boost::asio::io_service &ioService,
+         NewRemoteResourceCallback newRemoteResourceCallback, uint16_t port);
+
     void broadcastEnumerationRequest();
     void receiveUdpPacket();
     void actOnUdpPacket(size_t sizeBytes);

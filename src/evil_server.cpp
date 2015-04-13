@@ -35,11 +35,9 @@ std::unordered_map<std::string, std::string> readChannelNames() {
 }
 
 int main() {
-    auto channelNames = readChannelNames();
-
     io_service io;
 
-    auto server = std::make_shared<evil::Server>(io, channelNames);
+    auto server = evil::Server::make(io, readChannelNames());
     server->start();
 
     signal_set shutdownSignals{io};
@@ -51,6 +49,7 @@ int main() {
         server->stop();
     });
 
+    BOOST_LOG_TRIVIAL(info) << "Server started.";
     io.run();
 
     BOOST_LOG_TRIVIAL(info) << "Shutdown completed.";
