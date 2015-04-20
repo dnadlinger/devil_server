@@ -3,6 +3,8 @@
 namespace evil {
 
 namespace {
+const RegIdx channelBRegOffset = 11;
+
 const RegIdx fakeSystemControlReg = 0;
 const RegIdx realSystemControlReg = 0;
 const RegIdx fakeSystemConditionReg = 30;
@@ -10,6 +12,43 @@ const RegIdx realSystemConditionReg = 30;
 
 const RegValue systemControlMask = 0b11111;
 const unsigned systemControlBShift = 5;
+
+/// Converts a "fake" system control register value to the corrseponding value
+/// for the real hardware value, given the current value of the real register
+/// (needed as the part for the other channel must remain untouched).
+RegValue encodeSystemControlReg(Evil2Adapter::Channel channel,
+                                RegValue currentRealVal, RegValue fakeVal) {
+    auto mask = systemControlMask;
+    auto shift = 0;
+    if (channel == Evil2Adapter::Channel::b) {
+        shift = systemControlBShift;
+        mask <<= systemControlBShift;
+    }
+
+    auto realVal = currentRealVal;
+    realVal &= ~mask;
+    realVal |= (fakeVal << shift);
+
+    return realVal;
+}
+
+/// Extracts the "fake" system control register value for the given channel from
+/// the true hardware register value.
+RegValue decodeSystemControlReg(Evil2Adapter::Channel channel, RegValue val) {
+    if (channel == Evil2Adapter::Channel::b) {
+        val >>= systemControlBShift;
+    }
+    return val & systemControlMask;
+}
+
+/// Extracts the "fake" system condition register value for the given channel
+/// from the true hardware register value.
+RegValue decodeSystemConditionReg(Evil2Adapter::Channel channel, RegValue val) {
+    if (channel == Evil2Adapter::Channel::b) {
+        val >>= 1;
+    }
+    return val & 0b1;
+}
 
 const std::array<std::array<StreamIdx, 4>, 2> streamMap = {
     {{{0, 2, 3, 4}}, {{1, 5, 6, 7}}}};
@@ -31,24 +70,18 @@ bool Evil2Adapter::isValidRegister(RegIdx idx) {
 }
 
 RegValue Evil2Adapter::readRegister(RegIdx idx) {
-    if (idx == fakeSystemControlReg) {
-        auto val = hw_->readRegister(realSystemControlReg);
-        if (channel_ == Channel::b) {
-            val >>= systemControlBShift;
-        }
-        return val & systemControlMask;
+    if (idx == fakeSystemConditionReg) {
+        const auto val = hw_->readRegister(realSystemConditionReg);
+        return decodeSystemConditionReg(channel_, val);
     }
 
-    if (idx == fakeSystemConditionReg) {
-        auto val = hw_->readRegister(realSystemConditionReg);
-        if (channel_ == Channel::b) {
-            val >>= 1;
-        }
-        return val & 0b1;
+    if (idx == fakeSystemControlReg) {
+        const auto val = hw_->readRegister(realSystemControlReg);
+        return decodeSystemControlReg(channel_, val);
     }
 
     if (channel_ == Channel::b) {
-        idx += 11;
+        idx += channelBRegOffset;
     }
     return hw_->readRegister(idx);
 }
@@ -58,34 +91,37 @@ bool Evil2Adapter::modifyRegister(RegIdx idx, RegValue oldVal,
     if (idx == fakeSystemConditionReg) return false;
 
     if (idx == fakeSystemControlReg) {
-        // Figure out which part we need to modify.
-        auto mask = systemControlMask;
-        auto shift = 0;
-        if (channel_ == Channel::b) {
-            shift = systemControlBShift;
-            mask <<= systemControlBShift;
-        }
-
-        // Extend oldVal/newVal with the unchanged part.
-        auto oldReg = hw_->readRegister(realSystemControlReg);
-        oldReg &= ~mask;
-        oldReg |= (oldVal << shift);
-
-        auto newReg = oldReg;
-        newReg &= ~mask;
-        newReg |= (newVal << shift);
-
+        const auto realReg = hw_->readRegister(realSystemControlReg);
+        const auto oldReg = encodeSystemControlReg(channel_, realReg, oldVal);
+        const auto newReg = encodeSystemControlReg(channel_, realReg, newVal);
         return hw_->modifyRegister(realSystemControlReg, oldReg, newReg);
     }
 
     if (channel_ == Channel::b) {
-        idx += 11;
+        idx += channelBRegOffset;
     }
     return hw_->modifyRegister(idx, oldVal, newVal);
 }
 
 void Evil2Adapter::addRegisterChangeCallback(RegisterChangeCallback cb) {
-    hw_->addRegisterChangeCallback(cb);
+    hw_->addRegisterChangeCallback([ c = channel_, cb ](RegIdx idx,
+                                                        RegValue val) {
+        if (idx == realSystemConditionReg) {
+            cb(fakeSystemConditionReg, decodeSystemConditionReg(c, val));
+            return;
+        }
+
+        if (idx == realSystemControlReg) {
+            cb(fakeSystemControlReg, decodeSystemControlReg(c, val));
+            return;
+        }
+
+        if (c == Channel::b) {
+            idx -= channelBRegOffset;
+        }
+
+        cb(idx, val);
+    });
 }
 
 StreamIdx Evil2Adapter::streamCount() { return 4; }
