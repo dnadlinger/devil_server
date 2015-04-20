@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include "boost/asio/read.hpp"
+#include "boost/asio/steady_timer.hpp"
 #include "boost/asio/write.hpp"
 #include "boost/log/trivial.hpp"
 
@@ -68,6 +69,15 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
     auto self = shared_from_this();
     spawn(port_.get_io_service(), [this, self, initializedCallback](
                                       yield_context yc) {
+        // Wait a bit to give the hardware some time to start up, in case the
+        // user just switched it on. The UART just stops working if we are to
+        // quick (probably related to the FPGA reconfiguration). This is
+        // particularly noticable when powering the Papilio board from USB for
+        // testing, where hot-plugging basically does not work at all without
+        // the delay.
+        steady_timer startupDelay{port_.get_io_service(), 2s};
+        startupDelay.async_wait(yc);
+
         try {
             for (RegIdx i = 0; i < registerCount_; ++i) {
                 registerCache_[i] = readRegister(i, yc);
