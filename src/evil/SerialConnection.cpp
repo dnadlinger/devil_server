@@ -74,9 +74,26 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
         // quick (probably related to the FPGA reconfiguration). This is
         // particularly noticable when powering the Papilio board from USB for
         // testing, where hot-plugging basically does not work at all without
-        // the delay.
+        // the delay. There might be some garbage written to the bus which we
+        // need to ignore.
+        unsigned char garbage[1];
+        std::function<void()> readGarbage = [&] {
+            async_read(port_, buffer(garbage),
+                       [&](const error_code &, size_t bytesRead) {
+                           if (bytesRead) {
+                               // If we have read something, there might be
+                               // more still. The actual amount of data seems
+                               // to vary.
+                               readGarbage();
+                           }
+                       });
+        };
+        readGarbage();
         steady_timer startupDelay{port_.get_io_service(), 2s};
         startupDelay.async_wait(yc);
+
+        // After the grace period has elapsed, stop the garbage read loop.
+        port_.cancel();
 
         try {
             for (RegIdx i = 0; i < registerCount_; ++i) {
