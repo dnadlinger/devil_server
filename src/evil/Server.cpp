@@ -102,6 +102,9 @@ void Server::registerDevice(const std::string &path,
         auto chanB = NetworkChannel::make(ioService_, b);
         chanB->start();
         announce(*chanB, ":B");
+    } else {
+        BOOST_LOG_TRIVIAL(warning) << "Do not know how to handle version "
+                                   << versionMajor;
     }
 }
 }
