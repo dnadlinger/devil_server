@@ -86,6 +86,11 @@ void Server::registerDevice(const std::string &path,
             r.displayName = prettyName.empty() ? fullSerial : prettyName;
 
             fliquer_->addLocalResource(r);
+
+            auto self = shared_from_this();
+            conn->addShutdownCallback([this, self, r]{
+              fliquer_->removeLocalResource(r);
+            });
         };
 
     if (versionMajor == 1 || versionMajor == 3) {
