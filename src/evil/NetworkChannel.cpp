@@ -217,6 +217,8 @@ void NetworkChannel::sendRpcSuccessResponse() {
                                      msgpack::type::nil>;
     msgpack::pack(rpcResponseBuf_,
                   Msg(msgpackrpc::reply, lastRequestMsgId_, {}, {}));
+
+    sendRpcResponseBuf();
 }
 
 template <typename T>
@@ -226,6 +228,8 @@ void NetworkChannel::sendRpcSuccessResponse(T &&returnVal) {
     using Msg = msgpack::type::tuple<unsigned, unsigned, msgpack::type::nil, T>;
     msgpack::pack(rpcResponseBuf_, Msg(msgpackrpc::reply, lastRequestMsgId_, {},
                                        std::forward<T>(returnVal)));
+
+    sendRpcResponseBuf();
 }
 
 void NetworkChannel::sendRpcErrorResponse(const std::string &errorMsg) {
@@ -235,6 +239,21 @@ void NetworkChannel::sendRpcErrorResponse(const std::string &errorMsg) {
                                      msgpack::type::nil>;
     msgpack::pack(rpcResponseBuf_,
                   Msg(msgpackrpc::reply, lastRequestMsgId_, errorMsg, {}));
+
+    sendRpcResponseBuf();
+}
+
+void NetworkChannel::sendRpcResponseBuf() {
+    auto self = shared_from_this();
+    rpcSocket_.socket.async_send(
+        buffer(rpcResponseBuf_.data(), rpcResponseBuf_.size()),
+        [this, self](const error_code &ec, size_t) {
+            if (ec) {
+                BOOST_LOG(log_)
+                    << "Error sending RPC response: " << ec.message();
+            }
+            receiveRpcCommand();
+        });
 }
 
 template <typename... T>

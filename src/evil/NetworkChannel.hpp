@@ -37,6 +37,7 @@ private:
     void sendRpcSuccessResponse();
     template <typename T> void sendRpcSuccessResponse(T &&returnVal);
     void sendRpcErrorResponse(const std::string &errorMsg);
+    void sendRpcResponseBuf();
 
     template <typename... T>
     void sendNotification(const std::string &name, T &&... values);
