@@ -138,7 +138,7 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
             if (err.code() != error::eof &&
                 err.code() != error::bad_descriptor &&
                 err.code() != errc::operation_canceled) {
-                // If the error is not just due to the EVIl being disconnected
+                // If the error is not just due to the EVIL being disconnected
                 // or the server being shut down gracefully, log it.
                 BOOST_LOG_TRIVIAL(info)
                     << "Error in serial communication; terminating connection: "

@@ -109,7 +109,7 @@ void Server::registerDevice(const std::string &path,
         announce(*chanB, ":B");
     } else {
         BOOST_LOG_TRIVIAL(warning) << "Do not know how to handle version "
-                                   << versionMajor;
+                                   << versionMajor << "." << versionMinor;
     }
 }
 }
