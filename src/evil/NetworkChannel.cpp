@@ -17,14 +17,15 @@ namespace methods {
 const auto readRegister = "readRegister"s;
 const auto modifyRegister = "modifyRegister"s;
 const auto notificationPort = "notificationPort"s;
-const auto streamingPorts = "streamingPorts"s;
-const auto configureStreams = "configureStreams"s;
+const auto streamPorts = "streamPorts"s;
+const auto streamAcquisitionConfig = "streamAcquisitionConfig"s;
+const auto setStreamAcquisitionConfig = "setStreamAcquisitionConfig"s;
 }
 
 namespace notifications {
-const auto registerChanged = "registerChanged";
-const auto streamingParamsChanged = "streamingParamsChanged";
-const auto shutdown = "shutdown";
+const auto registerChanged = "registerChanged"s;
+const auto streamAcquisitionConfigChanged = "streamAcquisitionConfigChanged"s;
+const auto shutdown = "shutdown"s;
 }
 
 namespace msgpackrpc {
@@ -130,6 +131,8 @@ void NetworkChannel::processRpcCommand(const char *data, size_t sizeBytes) {
         lastRequestMsgId_ = request.get<1>();
         const auto method = request.get<2>();
         auto params = request.get<3>();
+
+        using NoParams = msgpack::type::tuple<>;
         if (method == methods::readRegister) {
             const auto regIdx =
                 std::get<0>(params.as<msgpack::type::tuple<RegIdx>>());
@@ -156,13 +159,13 @@ void NetworkChannel::processRpcCommand(const char *data, size_t sizeBytes) {
         }
 
         if (method == methods::notificationPort) {
-            params.as<msgpack::type::tuple<>>();
+            params.as<NoParams>();
             sendRpcSuccessResponse(notificationSocket_.port);
             return;
         }
 
-        if (method == methods::streamingPorts) {
-            params.as<msgpack::type::tuple<>>();
+        if (method == methods::streamPorts) {
+            params.as<NoParams>();
             std::vector<uint16_t> ports;
             ports.reserve(streamingSockets_.size());
             std::transform(streamingSockets_.begin(), streamingSockets_.end(),
@@ -172,17 +175,39 @@ void NetworkChannel::processRpcCommand(const char *data, size_t sizeBytes) {
             return;
         }
 
-        if (method == methods::configureStreams) {
+        if (method == methods::streamAcquisitionConfig) {
+            params.as<NoParams>();
+            if (streamingSockets_.empty()) {
+                sendRpcErrorResponse("Hardware has no data streams.");
+                return;
+            }
+
+            // What channel we use here does not matter.
+            const auto config = hw_->streamAcquisitionConfig(0);
+            sendRpcSuccessResponse(msgpack::type::tuple<double, unsigned>(
+                config.timeSpan / 1s, config.sampleCount));
+
+            return;
+        }
+
+        if (method == methods::setStreamAcquisitionConfig) {
+            if (streamingSockets_.empty()) {
+                sendRpcErrorResponse("Hardware has no data streams.");
+                return;
+            }
+
             double timeSpanSeconds;
             unsigned sampleCount;
             std::tie(timeSpanSeconds, sampleCount) =
                 params.as<msgpack::type::tuple<double, unsigned>>();
 
+            StreamAcquisitionConfig config{timeSpanSeconds * 1s, sampleCount};
             for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
-                hw_->configureStream(i, {timeSpanSeconds * 1s, sampleCount});
+                hw_->setStreamAcquisitionConfig(i, config);
             }
 
-            // TODO: Send streaming params change notification.
+            sendNotification(notifications::streamAcquisitionConfigChanged,
+                             timeSpanSeconds, sampleCount);
 
             sendRpcSuccessResponse();
             return;

@@ -12,10 +12,11 @@ using RegValue = uint16_t;
 using StreamIdx = unsigned;
 using StreamSample = uint8_t;
 
-struct StreamParams {
-    StreamParams()
+struct StreamAcquisitionConfig {
+    StreamAcquisitionConfig()
         : timeSpan{std::chrono::milliseconds(1)}, sampleCount(1024) {}
-    StreamParams(std::chrono::duration<double> timeSpan, unsigned sampleCount)
+    StreamAcquisitionConfig(std::chrono::duration<double> timeSpan,
+                            unsigned sampleCount)
         : timeSpan{timeSpan}, sampleCount{sampleCount} {}
 
     std::chrono::duration<double> timeSpan;
@@ -47,8 +48,14 @@ public:
 
     virtual StreamIdx streamCount() = 0;
 
-    /// \brief Configures the streaming parameters.
-    virtual void configureStream(StreamIdx idx, const StreamParams &params) = 0;
+    /// \brief Returns the configuration currently used for acquiring stream
+    /// data.
+    virtual StreamAcquisitionConfig streamAcquisitionConfig(StreamIdx idx) = 0;
+
+    /// \brief Sets a configuration for acquiring streams to use from now on.
+    virtual void
+    setStreamAcquisitionConfig(StreamIdx idx,
+                               const StreamAcquisitionConfig &params) = 0;
 
     using StreamPacketCallback = std::function<void(const StreamPacket &)>;
     virtual void setStreamPacketCallback(StreamIdx idx,

@@ -130,7 +130,7 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
                 for (StreamIdx i = 0; i < streamCount_; ++i) {
                     const auto &cb = streamPacketCallbacks_[i];
                     if (cb) {
-                        cb(readStreamPacket(i, streamParams_[i], yc));
+                        cb(readStreamPacket(i, streamConfigs_[i], yc));
                     }
                 }
             }
@@ -199,9 +199,14 @@ void SerialConnection::addRegisterChangeCallback(RegisterChangeCallback cb) {
 
 StreamIdx SerialConnection::streamCount() { return streamCount_; }
 
-void SerialConnection::configureStream(StreamIdx idx,
-                                       const StreamParams &params) {
-    streamParams_[idx] = params;
+StreamAcquisitionConfig
+SerialConnection::streamAcquisitionConfig(StreamIdx idx) {
+    return streamConfigs_[idx];
+}
+
+void SerialConnection::setStreamAcquisitionConfig(
+    StreamIdx idx, const StreamAcquisitionConfig &config) {
+    streamConfigs_[idx] = config;
 }
 
 void SerialConnection::setStreamPacketCallback(StreamIdx idx,
@@ -229,18 +234,17 @@ void SerialConnection::writeRegister(RegIdx idx, RegValue value,
     async_write(port_, buffer(writeBuf), yc);
 }
 
-StreamPacket SerialConnection::readStreamPacket(StreamIdx idx,
-                                                const StreamParams &params,
-                                                yield_context yc) {
+StreamPacket SerialConnection::readStreamPacket(
+    StreamIdx idx, const StreamAcquisitionConfig &config, yield_context yc) {
     auto &countCache = registerCache_[hw::special_regs::streamSampleCount];
-    if (countCache != params.sampleCount) {
-        countCache = params.sampleCount;
+    if (countCache != config.sampleCount) {
+        countCache = config.sampleCount;
         writeRegister(hw::special_regs::streamSampleCount, countCache, yc);
     }
 
     auto &intervalCache = registerCache_[hw::special_regs::streamSampleCount];
     const auto interval =
-        hw::sampleIntervalToReg(params.timeSpan / params.sampleCount);
+        hw::sampleIntervalToReg(config.timeSpan / config.sampleCount);
     if (intervalCache != interval) {
         intervalCache = interval;
         writeRegister(hw::special_regs::streamInterval, intervalCache, yc);
@@ -251,7 +255,7 @@ StreamPacket SerialConnection::readStreamPacket(StreamIdx idx,
     async_write(port_, buffer(writeBuf), yc);
 
     // Initialization value does not matter, will get overwritten anyway.
-    streamBuf_.resize(params.sampleCount, 0);
+    streamBuf_.resize(config.sampleCount, 0);
     async_read(port_, buffer(streamBuf_), yc);
 
     const auto triggerOffset =

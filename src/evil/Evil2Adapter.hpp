@@ -26,7 +26,9 @@ public:
 
     StreamIdx streamCount() override;
 
-    void configureStream(StreamIdx idx, const StreamParams &params) override;
+    StreamAcquisitionConfig streamAcquisitionConfig(StreamIdx idx) override;
+
+    void setStreamAcquisitionConfig(StreamIdx idx, const StreamAcquisitionConfig &config) override;
 
     void setStreamPacketCallback(StreamIdx idx,
                                  StreamPacketCallback cb) override;

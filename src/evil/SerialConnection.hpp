@@ -38,8 +38,10 @@ public:
 
     StreamIdx streamCount() override;
 
-    void configureStream(StreamIdx idx,
-                         const StreamParams &streamParams) override;
+    StreamAcquisitionConfig streamAcquisitionConfig(StreamIdx idx) override;
+
+    void setStreamAcquisitionConfig(
+        StreamIdx idx, const StreamAcquisitionConfig &config) override;
 
     void setStreamPacketCallback(StreamIdx idx,
                                  StreamPacketCallback cb) override;
@@ -52,7 +54,8 @@ private:
     void writeRegister(RegIdx idx, RegValue value,
                        boost::asio::yield_context yc);
 
-    StreamPacket readStreamPacket(StreamIdx idx, const StreamParams &params,
+    StreamPacket readStreamPacket(StreamIdx idx,
+                                  const StreamAcquisitionConfig &config,
                                   boost::asio::yield_context yc);
 
     boost::asio::serial_port port_;
@@ -64,7 +67,7 @@ private:
     std::vector<RegisterChangeCallback> registerChangeCallbacks_;
 
     enum { streamCount_ = 8 };
-    std::array<StreamParams, streamCount_> streamParams_;
+    std::array<StreamAcquisitionConfig, streamCount_> streamConfigs_;
     std::array<StreamPacketCallback, streamCount_> streamPacketCallbacks_;
 
     std::deque<std::pair<RegIdx, RegValue>> pendingRegisterWrites_;

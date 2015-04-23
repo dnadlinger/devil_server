@@ -126,9 +126,15 @@ void Evil2Adapter::addRegisterChangeCallback(RegisterChangeCallback cb) {
 
 StreamIdx Evil2Adapter::streamCount() { return 4; }
 
-void Evil2Adapter::configureStream(StreamIdx idx, const StreamParams &params) {
-    hw_->configureStream(streamMap[static_cast<unsigned>(channel_)][idx],
-                         params);
+StreamAcquisitionConfig Evil2Adapter::streamAcquisitionConfig(StreamIdx idx) {
+    return hw_->streamAcquisitionConfig(
+        streamMap[static_cast<unsigned>(channel_)][idx]);
+}
+
+void Evil2Adapter::setStreamAcquisitionConfig(
+    StreamIdx idx, const StreamAcquisitionConfig &config) {
+    hw_->setStreamAcquisitionConfig(
+        streamMap[static_cast<unsigned>(channel_)][idx], config);
 }
 
 void Evil2Adapter::setStreamPacketCallback(StreamIdx idx,
