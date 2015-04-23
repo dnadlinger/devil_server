@@ -116,11 +116,11 @@ void Evil2Adapter::addRegisterChangeCallback(RegisterChangeCallback cb) {
             return;
         }
 
-        if (c == Channel::b) {
-            idx -= channelBRegOffset;
+        if (c == Channel::a && idx <= channelBRegOffset) {
+            cb(idx, val);
+        } else if (c == Channel::b && idx > channelBRegOffset) {
+            cb(idx - channelBRegOffset, val);
         }
-
-        cb(idx, val);
     });
 }
 
