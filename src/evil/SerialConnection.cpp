@@ -242,7 +242,7 @@ StreamPacket SerialConnection::readStreamPacket(
         writeRegister(hw::special_regs::streamSampleCount, countCache, yc);
     }
 
-    auto &intervalCache = registerCache_[hw::special_regs::streamSampleCount];
+    auto &intervalCache = registerCache_[hw::special_regs::streamInterval];
     const auto interval =
         hw::sampleIntervalToReg(config.timeSpan / config.sampleCount);
     if (intervalCache != interval) {
