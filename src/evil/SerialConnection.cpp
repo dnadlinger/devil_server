@@ -45,8 +45,8 @@ const auto minSampleClockDivider = 400;
 const auto sampleClockDividerStep = 512;
 
 RegValue sampleIntervalToReg(std::chrono::duration<double> i) {
-    int reg =
-        ((i / clockInterval) - minSampleClockDivider) / sampleClockDividerStep;
+    int reg = ceil(((i / clockInterval) - minSampleClockDivider) /
+                   sampleClockDividerStep);
     return std::min(std::max(0, reg), 65535);
 }
 
