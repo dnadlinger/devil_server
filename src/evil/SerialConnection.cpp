@@ -18,6 +18,9 @@ namespace commands {
 const uint8_t readFromReg = 0x0 << 5;
 const uint8_t writeToReg = 0x1 << 5;
 const uint8_t readFromStream = 0x2 << 5;
+
+// This opcode is currently not assigned, so it acts as a no-op.
+const uint8_t noop = 0x7 << 5;
 }
 
 namespace special_regs {
@@ -76,26 +79,17 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
         // quick (probably related to the FPGA reconfiguration). This is
         // particularly noticable when powering the Papilio board from USB for
         // testing, where hot-plugging basically does not work at all without
-        // the delay. There might be some garbage written to the bus which we
-        // need to ignore.
-        unsigned char garbage[1];
-        std::function<void()> readGarbage = [&] {
-            async_read(port_, buffer(garbage),
-                       [&](const error_code &, size_t bytesRead) {
-                           if (bytesRead) {
-                               // If we have read something, there might be
-                               // more still. The actual amount of data seems
-                               // to vary.
-                               readGarbage();
-                           }
-                       });
-        };
-        readGarbage();
-        timeout_.expires_from_now(2s);
+        // the delay.
+
+        timeout_.expires_from_now(1s);
         timeout_.async_wait(yc);
 
-        // After the grace period has elapsed, stop the garbage read loop.
-        port_.cancel();
+        // If the hardware has previously been abruptly disconnected without
+        // resetting it afterwards or the server process was killed, it might
+        // still be waiting for the second part of a command. Sometimes, there
+        // also seems to be garbage written to the UART when the FPGA
+        // reconfigures.
+        realignProtocol(yc);
 
         try {
             for (RegIdx i = 0; i < registerCount_; ++i) {
@@ -134,38 +128,54 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
     });
 }
 
+void SerialConnection::realignProtocol(yield_context yc) {
+    // Write some 1-byte no-ops to complete any partially transmitted multi-byte
+    // commands. In theory, 2 bytes should be enough since our longest commands
+    // are 3 bytes, but the exact amount is inconsequential.
+    std::array<uint8_t, 5> noops;
+    std::fill(noops.begin(), noops.end(), hw::commands::noop);
+    async_write(port_, buffer(noops), yc);
+
+    // Now, read any garbage the device might send in response.
+    armTimeout(5 * readTimeout);
+    std::array<uint8_t, 1> garbage;
+    try {
+        while (true) {
+            async_read(port_, buffer(garbage), yc);
+        }
+    } catch (system_error &err) {
+        // Ignore the failure due to the timeout elapsing.
+        if (err.code() != errc::operation_canceled) throw err;
+    }
+}
+
 void SerialConnection::mainLoop(yield_context yc) {
     while (!shuttingDown_) {
-        // TODO: Try to cope with the case where the FPGA got only half the
-        // command by sending a bunch of 1-byte no-ops and then ignore any data
-        // arriving immediately after that.
         try {
-            while (!shuttingDown_) {
-                while (!pendingRegisterWrites_.empty()) {
-                    RegIdx idx;
-                    RegValue value;
+            while (!pendingRegisterWrites_.empty()) {
+                RegIdx idx;
+                RegValue value;
 
-                    std::tie(idx, value) = pendingRegisterWrites_.front();
-                    pendingRegisterWrites_.pop_front();
+                std::tie(idx, value) = pendingRegisterWrites_.front();
+                pendingRegisterWrites_.pop_front();
 
-                    writeRegister(idx, value, yc);
-                }
+                writeRegister(idx, value, yc);
+            }
 
-                for (auto &idx : hw::regsToṔoll) {
-                    const auto newVal = readRegister(idx, yc);
-                    if (registerCache_[idx] != newVal) {
-                        registerCache_[idx] = newVal;
-                        for (auto &cb : registerChangeCallbacks_) {
-                            cb(idx, newVal);
-                        }
+            for (auto &idx : hw::regsToṔoll) {
+                const auto newVal = readRegister(idx, yc);
+                if (registerCache_[idx] != newVal) {
+                    registerCache_[idx] = newVal;
+                    for (auto &cb : registerChangeCallbacks_) {
+                        cb(idx, newVal);
                     }
                 }
+            }
 
-                for (StreamIdx i = 0; i < streamCount_; ++i) {
-                    const auto &cb = streamPacketCallbacks_[i];
-                    if (cb) {
-                        cb(readStreamPacket(i, streamConfigs_[i], yc));
-                    }
+            for (StreamIdx i = 0; i < streamCount_; ++i) {
+                const auto &cb = streamPacketCallbacks_[i];
+                if (cb) {
+                    cb(readStreamPacket(i, streamConfigs_[i], yc));
                 }
             }
         } catch (system_error &err) {
@@ -176,6 +186,7 @@ void SerialConnection::mainLoop(yield_context yc) {
             BOOST_LOG_TRIVIAL(info)
                 << devicePath_
                 << ": Operation timed out, trying to rescue connection.";
+            realignProtocol(yc);
         }
     }
 }

@@ -52,6 +52,8 @@ private:
     SerialConnection(boost::asio::io_service &ioService,
                      std::string devicePath);
 
+    void realignProtocol(boost::asio::yield_context yc);
+
     void mainLoop(boost::asio::yield_context yc);
 
     RegValue readRegister(RegIdx idx, boost::asio::yield_context yc);
