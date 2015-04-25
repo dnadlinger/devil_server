@@ -2,12 +2,14 @@
 #define EVIL_SERIALCONNECTION_HPP
 
 #include <array>
+#include <chrono>
 #include <deque>
 #include <functional>
 #include <memory>
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/serial_port.hpp"
 #include "boost/asio/spawn.hpp"
+#include "boost/asio/steady_timer.hpp"
 #include "evil/HardwareChannel.hpp"
 
 namespace evil {
@@ -16,9 +18,9 @@ class SerialConnection : public HardwareChannel,
                          public std::enable_shared_from_this<SerialConnection> {
 public:
     static std::shared_ptr<SerialConnection>
-    make(boost::asio::io_service &ioService, const std::string &devicePath) {
+    make(boost::asio::io_service &ioService, std::string devicePath) {
         return std::shared_ptr<SerialConnection>(
-            new SerialConnection(ioService, devicePath));
+            new SerialConnection(ioService, std::move(devicePath)));
     }
 
     using InitializedCallback = std::function<void(uint16_t, uint8_t)>;
@@ -48,7 +50,9 @@ public:
 
 private:
     SerialConnection(boost::asio::io_service &ioService,
-                     const std::string &devicePath);
+                     std::string devicePath);
+
+    void mainLoop(boost::asio::yield_context yc);
 
     RegValue readRegister(RegIdx idx, boost::asio::yield_context yc);
     void writeRegister(RegIdx idx, RegValue value,
@@ -58,8 +62,13 @@ private:
                                   const StreamAcquisitionConfig &config,
                                   boost::asio::yield_context yc);
 
-    boost::asio::serial_port port_;
+    void armTimeout(std::chrono::duration<double> duration);
 
+    std::string devicePath_;
+    boost::asio::serial_port port_;
+    boost::asio::steady_timer timeout_;
+
+    bool shuttingDown_;
     std::vector<ShutdownCallback> shutdownCallbacks_;
 
     enum { registerCount_ = 32 };

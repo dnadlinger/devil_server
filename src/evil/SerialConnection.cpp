@@ -1,8 +1,7 @@
 #include "SerialConnection.hpp"
 
-#include <chrono>
+#include <algorithm>
 #include "boost/asio/read.hpp"
-#include "boost/asio/steady_timer.hpp"
 #include "boost/asio/write.hpp"
 #include "boost/log/trivial.hpp"
 
@@ -52,11 +51,14 @@ std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
     return (r * sampleClockDividerStep + minSampleClockDivider) * clockInterval;
 }
 }
+
+const auto readTimeout = 0.2s;
 }
 
 SerialConnection::SerialConnection(io_service &ioService,
-                                   const std::string &devicePath)
-    : port_{ioService, devicePath} {
+                                   std::string devicePath)
+    : devicePath_{std::move(devicePath)}, port_{ioService, devicePath_},
+      timeout_{ioService}, shuttingDown_{false} {
     port_.set_option(serial_port::baud_rate(3000000));
     port_.set_option(serial_port::character_size(8));
     port_.set_option(serial_port::stop_bits(serial_port::stop_bits::one));
@@ -89,8 +91,8 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
                        });
         };
         readGarbage();
-        steady_timer startupDelay{port_.get_io_service(), 2s};
-        startupDelay.async_wait(yc);
+        timeout_.expires_from_now(2s);
+        timeout_.async_wait(yc);
 
         // After the grace period has elapsed, stop the garbage read loop.
         port_.cancel();
@@ -106,7 +108,39 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
 
             initializedCallback(versionMajor, versionMinor);
 
-            while (true) {
+            mainLoop(yc);
+        } catch (system_error &err) {
+            if (err.code() != error::eof &&
+                err.code() != error::bad_descriptor) {
+                // If the error is not just due to the EVIL being disconnected
+                // or the server being shut down gracefully, log it.
+                BOOST_LOG_TRIVIAL(info)
+                    << "Error in serial communication; terminating connection: "
+                    << err.what();
+            }
+        } catch (std::runtime_error &err) {
+            BOOST_LOG_TRIVIAL(warning)
+                << "Unexpected error in serial communication: " << err.what();
+        }
+
+        for (auto &cb : shutdownCallbacks_) {
+            cb();
+        }
+        shutdownCallbacks_.clear();
+        registerChangeCallbacks_.clear();
+        for (auto &c : streamPacketCallbacks_) {
+            c = nullptr;
+        }
+    });
+}
+
+void SerialConnection::mainLoop(yield_context yc) {
+    while (!shuttingDown_) {
+        // TODO: Try to cope with the case where the FPGA got only half the
+        // command by sending a bunch of 1-byte no-ops and then ignore any data
+        // arriving immediately after that.
+        try {
+            while (!shuttingDown_) {
                 while (!pendingRegisterWrites_.empty()) {
                     RegIdx idx;
                     RegValue value;
@@ -135,32 +169,21 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
                 }
             }
         } catch (system_error &err) {
-            if (err.code() != error::eof &&
-                err.code() != error::bad_descriptor &&
-                err.code() != errc::operation_canceled) {
-                // If the error is not just due to the EVIL being disconnected
-                // or the server being shut down gracefully, log it.
-                BOOST_LOG_TRIVIAL(info)
-                    << "Error in serial communication; terminating connection: "
-                    << err.what();
-            }
-        } catch (std::runtime_error &err) {
-            BOOST_LOG_TRIVIAL(warning)
-                << "Unexpected error in serial communication: " << err.what();
-        }
+            if (err.code() != errc::operation_canceled) throw err;
 
-        for (auto &cb : shutdownCallbacks_) {
-            cb();
+            if (shuttingDown_) return;
+
+            BOOST_LOG_TRIVIAL(info)
+                << devicePath_
+                << ": Operation timed out, trying to rescue connection.";
         }
-        shutdownCallbacks_.clear();
-        registerChangeCallbacks_.clear();
-        for (auto &c : streamPacketCallbacks_) {
-            c = nullptr;
-        }
-    });
+    }
 }
 
-void SerialConnection::stop() { port_.cancel(); }
+void SerialConnection::stop() {
+    shuttingDown_ = true;
+    port_.cancel();
+}
 
 void SerialConnection::addShutdownCallback(ShutdownCallback cb) {
     shutdownCallbacks_.push_back(cb);
@@ -220,7 +243,9 @@ RegValue SerialConnection::readRegister(RegIdx idx, yield_context yc) {
     async_write(port_, buffer(writeBuf), yc);
 
     std::array<RegValue, 1> readBuf;
+    armTimeout(readTimeout);
     async_read(port_, buffer(readBuf), yc);
+    timeout_.cancel();
 
     return readBuf[0];
 }
@@ -243,12 +268,14 @@ StreamPacket SerialConnection::readStreamPacket(
     }
 
     auto &intervalCache = registerCache_[hw::special_regs::streamInterval];
-    const auto interval =
+    const auto intervalReg =
         hw::sampleIntervalToReg(config.timeSpan / config.sampleCount);
-    if (intervalCache != interval) {
-        intervalCache = interval;
+    if (intervalCache != intervalReg) {
+        intervalCache = intervalReg;
         writeRegister(hw::special_regs::streamInterval, intervalCache, yc);
     }
+
+    const auto actualInterval = hw::sampleIntervalFromReg(intervalReg);
 
     std::array<uint8_t, 1> writeBuf;
     writeBuf[0] = hw::commands::readFromStream | idx;
@@ -256,7 +283,10 @@ StreamPacket SerialConnection::readStreamPacket(
 
     // Initialization value does not matter, will get overwritten anyway.
     streamBuf_.resize(config.sampleCount, 0);
+
+    armTimeout(actualInterval * config.sampleCount + readTimeout);
     async_read(port_, buffer(streamBuf_), yc);
+    timeout_.cancel();
 
     // The stream trigger offset register is written from the firmware-internal
     // sample counter, which counts down to zero. Since this is a bit backwards
@@ -266,6 +296,18 @@ StreamPacket SerialConnection::readStreamPacket(
         config.sampleCount -
         readRegister(hw::special_regs::streamTriggerOffset, yc);
 
-    return {hw::sampleIntervalFromReg(interval), triggerOffset, streamBuf_};
+    return {actualInterval, triggerOffset, streamBuf_};
+}
+
+void SerialConnection::armTimeout(std::chrono::duration<double> duration) {
+    timeout_.expires_from_now(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(duration));
+
+    auto self = shared_from_this();
+    timeout_.async_wait([this, self](const error_code &ec) {
+        if (ec != errc::operation_canceled) {
+            port_.cancel();
+        }
+    });
 }
 }
