@@ -258,7 +258,12 @@ StreamPacket SerialConnection::readStreamPacket(
     streamBuf_.resize(config.sampleCount, 0);
     async_read(port_, buffer(streamBuf_), yc);
 
+    // The stream trigger offset register is written from the firmware-internal
+    // sample counter, which counts down to zero. Since this is a bit backwards
+    // to the concept of an offset/slice, convert to an index based at the first
+    // sample here.
     const auto triggerOffset =
+        config.sampleCount -
         readRegister(hw::special_regs::streamTriggerOffset, yc);
 
     return {hw::sampleIntervalFromReg(interval), triggerOffset, streamBuf_};
