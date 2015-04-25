@@ -33,6 +33,10 @@ const unsigned request = 0;
 const unsigned reply = 1;
 const unsigned notification = 2;
 }
+
+namespace extension_types {
+const auto int8Array = 1;
+}
 }
 
 NetworkChannel::NetworkChannel(io_service &ioService,
@@ -307,24 +311,24 @@ void NetworkChannel::sendStreamPacket(StreamIdx idx,
     {
         p << msgpackrpc::notification;
         p << "streamPacket"s;
-        p.pack_map(4);
+        p.pack_array(1);
         {
-            p << "sampleIntervalSeconds"s;
-            p << packet.sampleInterval / 1s;
+            p.pack_map(3);
+            {
+                p << "sampleIntervalSeconds"s;
+                p << packet.sampleInterval / 1s;
 
-            p << "sampleCount"s;
-            p << packet.samples.size();
+                p << "triggerOffset"s;
+                p << packet.triggerOffset;
 
-            p << "dataType"s;
-            p << "int8"s;
-
-            p << "samples"s;
-            const auto sizeBytes =
-                packet.samples.size() * sizeof(packet.samples[0]);
-            p.pack_bin(sizeBytes);
-            p.pack_bin_body(
-                reinterpret_cast<const char *>(packet.samples.data()),
-                sizeBytes);
+                p << "samples"s;
+                const auto sizeBytes =
+                    packet.samples.size() * sizeof(packet.samples[0]);
+                p.pack_ext(sizeBytes, extension_types::int8Array);
+                p.pack_ext_body(
+                    reinterpret_cast<const char *>(packet.samples.data()),
+                    sizeBytes);
+            }
         }
     }
     streamingSockets_[idx]->socket.send(
