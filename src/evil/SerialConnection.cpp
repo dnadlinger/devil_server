@@ -38,7 +38,7 @@ bool isSpecialReg(RegIdx idx) {
            idx == special_regs::version;
 }
 
-const auto clockInterval = 1s / 96e3;
+const auto clockInterval = 1s / 96e6;
 const auto minSampleClockDivider = 400;
 const auto sampleClockDividerStep = 512;
 
