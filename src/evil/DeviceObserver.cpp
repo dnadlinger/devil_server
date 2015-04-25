@@ -105,9 +105,11 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
         if (p != filter.second) {
             // Log why we ignored a device event for helping people to debug why
             // their controller was not recognized.
-            if (filter.first != "ID_BUS"s) {
+            if (filter.first != "ID_BUS"s &&
+                filter.first != "ID_USB_INTERFACE_NUM"s) {
                 // Do not log mismatch for ID_BUS, as this leads to a lot of
-                // spew due to all the fixed virtual terminals.
+                // spew due to all the fixed virtual terminals. Same for the
+                // interface number and the Papilio's multi-channel FTDI chip.
                 BOOST_LOG(log_) << "Ignoring " << target_device::subsystem
                                 << " device event as " << filter.first << " is "
                                 << p << ", but target device has "
