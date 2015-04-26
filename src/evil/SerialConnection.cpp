@@ -86,14 +86,15 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
         timeout_.expires_from_now(1s);
         timeout_.async_wait(yc);
 
-        // If the hardware has previously been abruptly disconnected without
-        // resetting it afterwards or the server process was killed, it might
-        // still be waiting for the second part of a command. Sometimes, there
-        // also seems to be garbage written to the UART when the FPGA
-        // reconfigures.
-        realignProtocol(yc);
-
         try {
+            // If the hardware has previously been abruptly disconnected without
+            // resetting it afterwards or the server process was killed, it
+            // might still be waiting for the second part of a command.
+            // Sometimes, there also seems to be garbage written to the UART
+            // when the FPGA reconfigures.
+            realignProtocol(yc);
+
+            // Initial fetch of all the registers.
             for (RegIdx i = 0; i < registerCount_; ++i) {
                 registerCache_[i] = readRegister(i, yc);
             }
