@@ -14,7 +14,7 @@ using StreamSample = uint8_t;
 
 struct StreamAcquisitionConfig {
     StreamAcquisitionConfig()
-        : timeSpan{std::chrono::milliseconds(1)}, sampleCount(1024) {}
+        : timeSpan{std::chrono::milliseconds(10)}, sampleCount(512) {}
     StreamAcquisitionConfig(std::chrono::duration<double> timeSpan,
                             unsigned sampleCount)
         : timeSpan{timeSpan}, sampleCount{sampleCount} {}
