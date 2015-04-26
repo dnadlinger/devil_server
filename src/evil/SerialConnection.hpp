@@ -11,6 +11,7 @@
 #include "boost/asio/spawn.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "evil/HardwareChannel.hpp"
+#include "evil/PerformanceCounters.hpp"
 
 namespace evil {
 
@@ -18,9 +19,10 @@ class SerialConnection : public HardwareChannel,
                          public std::enable_shared_from_this<SerialConnection> {
 public:
     static std::shared_ptr<SerialConnection>
-    make(boost::asio::io_service &ioService, std::string devicePath) {
-        return std::shared_ptr<SerialConnection>(
-            new SerialConnection(ioService, std::move(devicePath)));
+    make(boost::asio::io_service &ioService, std::string devicePath,
+         std::shared_ptr<PerformanceCounters> performanceCounters) {
+        return std::shared_ptr<SerialConnection>(new SerialConnection(
+            ioService, std::move(devicePath), std::move(performanceCounters)));
     }
 
     using InitializedCallback = std::function<void(uint16_t, uint8_t)>;
@@ -42,15 +44,16 @@ public:
 
     StreamAcquisitionConfig streamAcquisitionConfig(StreamIdx idx) override;
 
-    void setStreamAcquisitionConfig(
-        StreamIdx idx, const StreamAcquisitionConfig &config) override;
+    void
+    setStreamAcquisitionConfig(StreamIdx idx,
+                               const StreamAcquisitionConfig &config) override;
 
     void setStreamPacketCallback(StreamIdx idx,
                                  StreamPacketCallback cb) override;
 
 private:
-    SerialConnection(boost::asio::io_service &ioService,
-                     std::string devicePath);
+    SerialConnection(boost::asio::io_service &ioService, std::string devicePath,
+                     std::shared_ptr<PerformanceCounters> performanceCounters);
 
     void realignProtocol(boost::asio::yield_context yc);
 
@@ -69,6 +72,7 @@ private:
     std::string devicePath_;
     boost::asio::serial_port port_;
     boost::asio::steady_timer timeout_;
+    std::shared_ptr<PerformanceCounters> performanceCounters_;
 
     bool shuttingDown_;
     std::vector<ShutdownCallback> shutdownCallbacks_;

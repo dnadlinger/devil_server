@@ -1,9 +1,7 @@
 #include "evil/NetworkChannel.hpp"
 
 #include <chrono>
-#include "azmq/message.hpp"
-#include "boost/log/common.hpp"
-#include "msgpack.hpp"
+#include "boost/log/trivial.hpp"
 
 using namespace boost::asio;
 using namespace boost::log;
@@ -28,12 +26,6 @@ const auto streamAcquisitionConfigChanged = "streamAcquisitionConfigChanged"s;
 const auto shutdown = "shutdown"s;
 }
 
-namespace msgpackrpc {
-const unsigned request = 0;
-const unsigned reply = 1;
-const unsigned notification = 2;
-}
-
 namespace extension_types {
 const auto int8Array = 1;
 }
@@ -41,8 +33,8 @@ const auto int8Array = 1;
 
 NetworkChannel::NetworkChannel(io_service &ioService,
                                std::shared_ptr<HardwareChannel> hw)
-    : hw_{std::move(hw)}, rpcSocket_{ioService, ZMQ_REP},
-      notificationSocket_{ioService, ZMQ_PUB}, currentlyProcessingRpc_{false} {
+    : ioService_{ioService}, hw_{std::move(hw)},
+      notificationSocket_{ioService, ZMQ_PUB} {
     for (unsigned i = 0; i < hw_->streamCount(); ++i) {
         streamingSockets_.emplace_back(new ZmqSocket(ioService, ZMQ_PUB));
     }
@@ -50,14 +42,15 @@ NetworkChannel::NetworkChannel(io_service &ioService,
 
 void NetworkChannel::start() {
     auto self = shared_from_this();
+    rpcInterface_ =
+        RpcInterface::make(ioService_, [this, self](const std::string &method,
+                                                    msgpack::object &params) {
+            return processRpcCommand(method, params);
+        });
+
     hw_->addShutdownCallback([this, self] {
         sendNotification(notifications::shutdown);
-        if (currentlyProcessingRpc_) {
-            sendRpcErrorResponse(
-                "Hardware has been disconnected or server is shutting down.");
-        }
-
-        rpcSocket_.socket.cancel();
+        rpcInterface_->stop();
     });
 
     hw_->addRegisterChangeCallback([this, self](RegIdx idx, RegValue val) {
@@ -65,224 +58,108 @@ void NetworkChannel::start() {
     });
 
     for (unsigned streamIdx = 0; streamIdx < hw_->streamCount(); ++streamIdx) {
-        // TODO: Do this only when there are actually subscribers for the stream
-        // in question.
+        // TODO: Do this only when there are actually subscribers for the
+        // stream in question.
         hw_->setStreamPacketCallback(
             streamIdx, [this, self, streamIdx](const StreamPacket &packet) {
                 sendStreamPacket(streamIdx, packet);
             });
     }
 
-    receiveRpcCommand();
+    rpcInterface_->start();
 }
 
 void NetworkChannel::stop() {
-    // Just stop hw, we'll do our cleanup in the shutdown callback we registered
-    // with it.
+    // Just stop hw, we'll do our cleanup in the shutdown callback we
+    // registered with it.
     hw_->stop();
 }
 
-void NetworkChannel::receiveRpcCommand() {
-    currentlyProcessingRpc_ = false;
-
-    auto self = shared_from_this();
-    rpcSocket_.socket.async_receive(
-        [this, self](const error_code &ec, const azmq::message &msg, size_t) {
-            if (ec == errc::operation_canceled) {
-                // We are shutting down.
-                return;
-            }
-
-            currentlyProcessingRpc_ = true;
-
-            if (ec) {
-                // Need to figure out when this happens, and how to respond
-                // (such as not to break the ZeroMQ request/reply contract).
-                BOOST_LOG(log_) << "Error receiving RPC message, what to do? "
-                                << ec.message() << " (" << ec << ")";
-                receiveRpcCommand();
-                return;
-            }
-
-            if (msg.more()) {
-                BOOST_LOG(log_) << "Received unexpected multipart message on "
-                                   "RPC socket.";
-                sendRpcErrorResponse("Unexpected multipart message");
-                return;
-            }
-
-            const auto msgBuf = msg.buffer();
-            processRpcCommand(buffer_cast<const char *>(msgBuf),
-                              buffer_size(msgBuf));
-        });
-}
-
-void NetworkChannel::processRpcCommand(const char *data, size_t sizeBytes) {
-    try {
-        auto unp = msgpack::unpack(data, sizeBytes);
-
-        using Request = msgpack::type::tuple<unsigned, unsigned, std::string,
-                                             msgpack::object>;
-        const auto request = unp.get().as<Request>();
-
-        const auto type = request.get<0>();
-        if (type != msgpackrpc::request) {
-            BOOST_LOG(log_)
-                << "Malformed RPC packet received: Invalid type: " << type;
-            return;
+bool NetworkChannel::processRpcCommand(const std::string &method,
+                                       msgpack::object &params) {
+    using NoParams = msgpack::type::tuple<>;
+    if (method == methods::readRegister) {
+        const auto regIdx =
+            std::get<0>(params.as<msgpack::type::tuple<RegIdx>>());
+        if (!hw_->isValidRegister(regIdx)) {
+            rpcInterface_->sendErrorResponse("Invalid register index.");
+            return true;
         }
-
-        lastRequestMsgId_ = request.get<1>();
-        const auto method = request.get<2>();
-        auto params = request.get<3>();
-
-        using NoParams = msgpack::type::tuple<>;
-        if (method == methods::readRegister) {
-            const auto regIdx =
-                std::get<0>(params.as<msgpack::type::tuple<RegIdx>>());
-            if (!hw_->isValidRegister(regIdx)) {
-                sendRpcErrorResponse("Invalid register index.");
-                return;
-            }
-            sendRpcSuccessResponse(hw_->readRegister(regIdx));
-            return;
-        }
-
-        if (method == methods::modifyRegister) {
-            RegIdx regIdx;
-            RegValue oldVal;
-            RegValue newVal;
-            std::tie(regIdx, oldVal, newVal) =
-                params.as<msgpack::type::tuple<RegIdx, RegValue, RegValue>>();
-            if (!hw_->isValidRegister(regIdx)) {
-                sendRpcErrorResponse("Invalid register index.");
-                return;
-            }
-            sendRpcSuccessResponse(hw_->modifyRegister(regIdx, oldVal, newVal));
-            return;
-        }
-
-        if (method == methods::notificationPort) {
-            params.as<NoParams>();
-            sendRpcSuccessResponse(notificationSocket_.port);
-            return;
-        }
-
-        if (method == methods::streamPorts) {
-            params.as<NoParams>();
-            std::vector<uint16_t> ports;
-            ports.reserve(streamingSockets_.size());
-            std::transform(streamingSockets_.begin(), streamingSockets_.end(),
-                           std::back_inserter(ports),
-                           [](const auto &a) { return a->port; });
-            sendRpcSuccessResponse(ports);
-            return;
-        }
-
-        if (method == methods::streamAcquisitionConfig) {
-            params.as<NoParams>();
-            if (streamingSockets_.empty()) {
-                sendRpcErrorResponse("Hardware has no data streams.");
-                return;
-            }
-
-            // What channel we use here does not matter.
-            const auto config = hw_->streamAcquisitionConfig(0);
-            sendRpcSuccessResponse(msgpack::type::tuple<double, unsigned>(
-                config.timeSpan / 1s, config.sampleCount));
-
-            return;
-        }
-
-        if (method == methods::setStreamAcquisitionConfig) {
-            if (streamingSockets_.empty()) {
-                sendRpcErrorResponse("Hardware has no data streams.");
-                return;
-            }
-
-            double timeSpanSeconds;
-            unsigned sampleCount;
-            std::tie(timeSpanSeconds, sampleCount) =
-                params.as<msgpack::type::tuple<double, unsigned>>();
-
-            StreamAcquisitionConfig config{timeSpanSeconds * 1s, sampleCount};
-            for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
-                hw_->setStreamAcquisitionConfig(i, config);
-            }
-
-            sendNotification(notifications::streamAcquisitionConfigChanged,
-                             timeSpanSeconds, sampleCount);
-
-            sendRpcSuccessResponse();
-            return;
-        }
-
-        BOOST_LOG(log_) << "Malformed RPC packet received: Unknown method: "
-                        << method;
-        sendRpcErrorResponse("Unknown method invoked.");
-        return;
-    } catch (msgpack::unpack_error &e) {
-        BOOST_LOG(log_) << "Malformed RPC packet received: " << e.what();
-        sendRpcErrorResponse("Type mismatch.");
-        return;
-    } catch (std::bad_cast &e) {
-        // msgpack throws bad_cast when we receive a valid msgpack object
-        // but try to get() it as an mismatched type.
-        BOOST_LOG(log_) << "Malformed RPC packet received: " << e.what();
-        sendRpcErrorResponse("Type mismatch.");
-        return;
-    } catch (...) {
-        sendRpcErrorResponse("Internal error.");
-        return;
+        rpcInterface_->sendSuccessResponse(hw_->readRegister(regIdx));
+        return true;
     }
 
-    assert(false && "Should have replied to RPC message (enforced by ZeroMQ).");
-}
+    if (method == methods::modifyRegister) {
+        RegIdx regIdx;
+        RegValue oldVal;
+        RegValue newVal;
+        std::tie(regIdx, oldVal, newVal) =
+            params.as<msgpack::type::tuple<RegIdx, RegValue, RegValue>>();
+        if (!hw_->isValidRegister(regIdx)) {
+            rpcInterface_->sendErrorResponse("Invalid register index.");
+            return true;
+        }
+        rpcInterface_->sendSuccessResponse(
+            hw_->modifyRegister(regIdx, oldVal, newVal));
+        return true;
+    }
 
-void NetworkChannel::sendRpcSuccessResponse() {
-    rpcResponseBuf_.clear();
+    if (method == methods::notificationPort) {
+        params.as<NoParams>();
+        rpcInterface_->sendSuccessResponse(notificationSocket_.port);
+        return true;
+    }
 
-    using Msg = msgpack::type::tuple<unsigned, unsigned, msgpack::type::nil,
-                                     msgpack::type::nil>;
-    msgpack::pack(rpcResponseBuf_,
-                  Msg(msgpackrpc::reply, lastRequestMsgId_, {}, {}));
+    if (method == methods::streamPorts) {
+        params.as<NoParams>();
+        std::vector<uint16_t> ports;
+        ports.reserve(streamingSockets_.size());
+        std::transform(streamingSockets_.begin(), streamingSockets_.end(),
+                       std::back_inserter(ports),
+                       [](const auto &a) { return a->port; });
+        rpcInterface_->sendSuccessResponse(ports);
+        return true;
+    }
 
-    sendRpcResponseBuf();
-}
+    if (method == methods::streamAcquisitionConfig) {
+        params.as<NoParams>();
+        if (streamingSockets_.empty()) {
+            rpcInterface_->sendErrorResponse("Hardware has no data streams.");
+            return true;
+        }
 
-template <typename T>
-void NetworkChannel::sendRpcSuccessResponse(T &&returnVal) {
-    rpcResponseBuf_.clear();
+        // What channel we use here does not matter.
+        const auto config = hw_->streamAcquisitionConfig(0);
+        rpcInterface_->sendSuccessResponse(
+            msgpack::type::tuple<double, unsigned>(config.timeSpan / 1s,
+                                                   config.sampleCount));
 
-    using Msg = msgpack::type::tuple<unsigned, unsigned, msgpack::type::nil, T>;
-    msgpack::pack(rpcResponseBuf_, Msg(msgpackrpc::reply, lastRequestMsgId_, {},
-                                       std::forward<T>(returnVal)));
+        return true;
+    }
 
-    sendRpcResponseBuf();
-}
+    if (method == methods::setStreamAcquisitionConfig) {
+        if (streamingSockets_.empty()) {
+            rpcInterface_->sendErrorResponse("Hardware has no data streams.");
+            return true;
+        }
 
-void NetworkChannel::sendRpcErrorResponse(const std::string &errorMsg) {
-    rpcResponseBuf_.clear();
+        double timeSpanSeconds;
+        unsigned sampleCount;
+        std::tie(timeSpanSeconds, sampleCount) =
+            params.as<msgpack::type::tuple<double, unsigned>>();
 
-    using Msg = msgpack::type::tuple<unsigned, unsigned, const std::string &,
-                                     msgpack::type::nil>;
-    msgpack::pack(rpcResponseBuf_,
-                  Msg(msgpackrpc::reply, lastRequestMsgId_, errorMsg, {}));
+        StreamAcquisitionConfig config{timeSpanSeconds * 1s, sampleCount};
+        for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
+            hw_->setStreamAcquisitionConfig(i, config);
+        }
 
-    sendRpcResponseBuf();
-}
+        sendNotification(notifications::streamAcquisitionConfigChanged,
+                         timeSpanSeconds, sampleCount);
 
-void NetworkChannel::sendRpcResponseBuf() {
-    auto self = shared_from_this();
-    rpcSocket_.socket.async_send(
-        buffer(rpcResponseBuf_.data(), rpcResponseBuf_.size()),
-        [this, self](const error_code &ec, size_t) {
-            if (ec) {
-                BOOST_LOG(log_)
-                    << "Error sending RPC response: " << ec.message();
-            }
-            receiveRpcCommand();
-        });
+        rpcInterface_->sendSuccessResponse();
+        return true;
+    }
+    return false;
 }
 
 template <typename... T>
@@ -333,15 +210,5 @@ void NetworkChannel::sendStreamPacket(StreamIdx idx,
     }
     streamingSockets_[idx]->socket.send(
         buffer(streamingBuf_.data(), streamingBuf_.size()));
-}
-
-NetworkChannel::ZmqSocket::ZmqSocket(io_service &ioService, int type)
-    : socket{ioService, type, true} {
-    // Listen on any device, using a system-assigned port.
-    socket.bind("tcp://*:*");
-
-    // Parse the endpoint string to get the chosen port.
-    auto e = socket.endpoint();
-    port = std::stoi(e.substr(e.find_last_of(':') + 1));
 }
 }

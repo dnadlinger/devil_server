@@ -58,10 +58,12 @@ std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
 const auto readTimeout = 0.2s;
 }
 
-SerialConnection::SerialConnection(io_service &ioService,
-                                   std::string devicePath)
+SerialConnection::SerialConnection(
+    io_service &ioService, std::string devicePath,
+    std::shared_ptr<PerformanceCounters> performanceCounters)
     : devicePath_{std::move(devicePath)}, port_{ioService, devicePath_},
-      timeout_{ioService}, shuttingDown_{false} {
+      timeout_{ioService}, performanceCounters_{performanceCounters},
+      shuttingDown_{false} {
     port_.set_option(serial_port::baud_rate(3000000));
     port_.set_option(serial_port::character_size(8));
     port_.set_option(serial_port::stop_bits(serial_port::stop_bits::one));
@@ -252,10 +254,13 @@ RegValue SerialConnection::readRegister(RegIdx idx, yield_context yc) {
     std::array<uint8_t, 1> writeBuf;
     writeBuf[0] = hw::commands::readFromReg | idx;
     async_write(port_, buffer(writeBuf), yc);
+    ++performanceCounters_->serialCommandsSent;
 
     std::array<RegValue, 1> readBuf;
     armTimeout(readTimeout);
     async_read(port_, buffer(readBuf), yc);
+    performanceCounters_->serialBytesReceived += readBuf.size();
+
     timeout_.cancel();
 
     return readBuf[0];
@@ -268,10 +273,12 @@ void SerialConnection::writeRegister(RegIdx idx, RegValue value,
     writeBuf[1] = static_cast<uint8_t>(value);
     writeBuf[2] = static_cast<uint8_t>(value >> 8);
     async_write(port_, buffer(writeBuf), yc);
+    ++performanceCounters_->serialCommandsSent;
 }
 
 StreamPacket SerialConnection::readStreamPacket(
     StreamIdx idx, const StreamAcquisitionConfig &config, yield_context yc) {
+
     auto &countCache = registerCache_[hw::special_regs::streamSampleCount];
     if (countCache != config.sampleCount) {
         countCache = config.sampleCount;
@@ -291,12 +298,14 @@ StreamPacket SerialConnection::readStreamPacket(
     std::array<uint8_t, 1> writeBuf;
     writeBuf[0] = hw::commands::readFromStream | idx;
     async_write(port_, buffer(writeBuf), yc);
+    ++performanceCounters_->serialCommandsSent;
 
     // Initialization value does not matter, will get overwritten anyway.
     streamBuf_.resize(config.sampleCount, 0);
 
     armTimeout(actualInterval * config.sampleCount + readTimeout);
     async_read(port_, buffer(streamBuf_), yc);
+    performanceCounters_->serialBytesReceived += streamBuf_.size();
     timeout_.cancel();
 
     // The stream trigger offset register is written from the firmware-internal

@@ -17,27 +17,40 @@ namespace {
 
 const auto configFileName = "evil_server.json";
 
-std::unordered_map<std::string, std::string> readChannelNames() {
+struct Config {
+    std::string serverId;
+    std::unordered_map<std::string, std::string> channelNames;
+};
+
+Config readConfig() {
     using namespace boost::property_tree;
 
-    std::unordered_map<std::string, std::string> result;
-
-    if (!boost::filesystem::exists(configFileName)) return result;
+    if (!boost::filesystem::exists(configFileName)) {
+        Config c;
+        c.serverId = "<unnamed>";
+        return c;
+    }
 
     ptree tree;
     read_json(configFileName, tree);
 
+    std::string serverId = tree.get_child("serverId").data();
+
+    std::unordered_map<std::string, std::string> channelNames;
     for (const auto &id : tree.get_child("channelNames")) {
-        result[id.first] = id.second.data();
+        channelNames[id.first] = id.second.data();
     }
-    return result;
+
+    return {std::move(serverId), std::move(channelNames)};
 }
 }
 
 int main() {
     io_service io;
 
-    auto server = evil::Server::make(io, readChannelNames());
+    const auto config = readConfig();
+
+    auto server = evil::Server::make(io, config.serverId, config.channelNames);
     server->start();
 
     signal_set shutdownSignals{io};

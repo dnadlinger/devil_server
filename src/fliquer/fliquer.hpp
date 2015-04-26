@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <ostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,6 +33,8 @@ struct SemVer {
                buildMetadata == rhs.buildMetadata;
     }
 };
+
+std::ostream &operator<<(std::ostream &str, const SemVer &s);
 
 /// \brief A resource that can be discovered via Fliquer.
 struct Resource {
