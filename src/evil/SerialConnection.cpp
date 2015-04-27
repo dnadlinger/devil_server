@@ -31,7 +31,7 @@ const RegIdx systemCondition = 30;
 const RegIdx version = 31;
 }
 
-const std::array<RegIdx, 1> regsToṔoll = {{special_regs::systemCondition}};
+const std::array<RegIdx, 1> regsToPoll = {{special_regs::systemCondition}};
 
 bool isSpecialReg(RegIdx idx) {
     return idx == special_regs::streamInterval ||
