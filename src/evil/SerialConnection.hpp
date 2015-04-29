@@ -86,6 +86,8 @@ private:
     std::array<StreamPacketCallback, streamCount_> streamPacketCallbacks_;
 
     std::deque<std::pair<RegIdx, RegValue>> pendingRegisterWrites_;
+    size_t nextRegPollIdx_;
+    size_t nextStreamIdx_;
     std::vector<StreamSample> streamBuf_;
 };
 }

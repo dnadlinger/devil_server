@@ -70,6 +70,9 @@ SerialConnection::SerialConnection(
     port_.set_option(serial_port::parity(serial_port::parity::none));
     port_.set_option(
         serial_port::flow_control(serial_port::flow_control::none));
+
+    nextRegPollIdx_ = 0;
+    nextStreamIdx_ = 0;
 }
 
 void SerialConnection::start(InitializedCallback initializedCallback) {
@@ -165,7 +168,9 @@ void SerialConnection::mainLoop(yield_context yc) {
                 writeRegister(idx, value, yc);
             }
 
-            for (auto &idx : hw::regsToPoll) {
+            if (nextRegPollIdx_ < hw::regsToPoll.size()) {
+                const auto idx = hw::regsToPoll[nextRegPollIdx_];
+
                 const auto newVal = readRegister(idx, yc);
                 if (registerCache_[idx] != newVal) {
                     registerCache_[idx] = newVal;
@@ -173,14 +178,29 @@ void SerialConnection::mainLoop(yield_context yc) {
                         cb(idx, newVal);
                     }
                 }
+
+                // Before reading the next register, check if there are pending
+                // register writes to keep control latency as low as possible.
+                ++nextRegPollIdx_;
+                continue;
             }
 
-            for (StreamIdx i = 0; i < streamCount_; ++i) {
-                const auto &cb = streamPacketCallbacks_[i];
+            if (nextStreamIdx_ < streamCount_) {
+                const auto &cb = streamPacketCallbacks_[nextStreamIdx_];
                 if (cb) {
-                    cb(readStreamPacket(i, streamConfigs_[i], yc));
+                    cb(readStreamPacket(nextStreamIdx_,
+                                        streamConfigs_[nextStreamIdx_], yc));
                 }
+
+                // Before acquiring the next stream packet, check if there are
+                // pending register writes to keep control latency as low as
+                // possible.
+                ++nextStreamIdx_;
+                continue;
             }
+
+            nextRegPollIdx_ = 0;
+            nextStreamIdx_ = 0;
         } catch (system_error &err) {
             if (err.code() != errc::operation_canceled) throw err;
 
