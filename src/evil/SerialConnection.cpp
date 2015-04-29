@@ -188,8 +188,9 @@ void SerialConnection::mainLoop(yield_context yc) {
             if (nextStreamIdx_ < streamCount_) {
                 const auto &cb = streamPacketCallbacks_[nextStreamIdx_];
                 if (cb) {
-                    cb(readStreamPacket(nextStreamIdx_,
-                                        streamConfigs_[nextStreamIdx_], yc));
+                    auto packet = readStreamPacket(
+                        nextStreamIdx_, streamConfigs_[nextStreamIdx_], yc);
+                    if (cb) cb(packet);
                 }
 
                 // Before acquiring the next stream packet, check if there are

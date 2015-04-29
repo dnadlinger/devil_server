@@ -38,12 +38,19 @@ private:
 
     void sendStreamPacket(StreamIdx idx, const StreamPacket &packet);
 
+    void nextMonitorEvent(StreamIdx idx, azmq::socket &socket);
+
+    void addStreamSubscription(StreamIdx idx);
+    void removeStreamSubscription(StreamIdx idx);
+
     boost::asio::io_service &ioService_;
     std::shared_ptr<HardwareChannel> hw_;
 
     std::shared_ptr<RpcInterface> rpcInterface_;
     ZmqSocket notificationSocket_;
     std::vector<std::unique_ptr<ZmqSocket>> streamingSockets_;
+    std::vector<std::unique_ptr<azmq::socket>> streamingMonitorSockets_;
+    std::vector<size_t> streamingSubscriberCounts_;
 
     /// Buffer for sending notifications. Only ever used while sendNotification
     /// is executing, but kept around here so we can reuse the allocation.

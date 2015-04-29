@@ -51,19 +51,22 @@ void NetworkChannel::start() {
     hw_->addShutdownCallback([this, self] {
         sendNotification(notifications::shutdown);
         rpcInterface_->stop();
+        for (auto &s : streamingMonitorSockets_) {
+            s->cancel();
+        }
+        streamingMonitorSockets_.clear();
     });
 
     hw_->addRegisterChangeCallback([this, self](RegIdx idx, RegValue val) {
         sendNotification(notifications::registerChanged, idx, val);
     });
 
-    for (unsigned streamIdx = 0; streamIdx < hw_->streamCount(); ++streamIdx) {
-        // TODO: Do this only when there are actually subscribers for the
-        // stream in question.
-        hw_->setStreamPacketCallback(
-            streamIdx, [this, self, streamIdx](const StreamPacket &packet) {
-                sendStreamPacket(streamIdx, packet);
-            });
+    streamingMonitorSockets_.reserve(hw_->streamCount());
+    streamingSubscriberCounts_.resize(hw_->streamCount(), 0);
+    for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
+        streamingMonitorSockets_.emplace_back(new azmq::socket(
+            streamingSockets_[i]->socket.monitor(ioService_, ZMQ_EVENT_ALL)));
+        nextMonitorEvent(i, *streamingMonitorSockets_.back());
     }
 
     rpcInterface_->start();
@@ -210,5 +213,77 @@ void NetworkChannel::sendStreamPacket(StreamIdx idx,
     }
     streamingSockets_[idx]->socket.send(
         buffer(streamingBuf_.data(), streamingBuf_.size()));
+}
+
+namespace {
+#pragma pack(1)
+struct MonitorEvent {
+    uint16_t type;
+    uint32_t value;
+};
+#pragma options align = reset
+}
+
+void NetworkChannel::nextMonitorEvent(StreamIdx idx, azmq::socket &socket) {
+    auto self = shared_from_this();
+    socket.async_receive([this, self, idx, &socket](
+        const error_code &ec, azmq::message &msg, size_t) {
+        if (ec == errc::operation_canceled) {
+            // We are shutting down.
+            return;
+        }
+
+        if (ec) {
+            BOOST_LOG_TRIVIAL(error) << "Error receiving streaming monitor "
+                                        "event; should not happen unless there "
+                                        "is a ZeroMQ-internal problem?";
+            nextMonitorEvent(idx, socket);
+            return;
+        }
+
+        if (!msg.more()) {
+            BOOST_LOG_TRIVIAL(error) << "Streaming monitor event only consists "
+                                        "of one part; should not happen unless "
+                                        "there is a ZeroMQ-internal problem?";
+            nextMonitorEvent(idx, socket);
+            return;
+        }
+
+        MonitorEvent event;
+        msg.buffer_copy(buffer(&event, sizeof(event)));
+
+        if (event.type == ZMQ_EVENT_ACCEPTED) {
+            addStreamSubscription(idx);
+        } else if (event.type == ZMQ_EVENT_DISCONNECTED) {
+            removeStreamSubscription(idx);
+        } else {
+            BOOST_LOG_TRIVIAL(info)
+                << "Ignoring streaming socket monitor event: type = "
+                << event.type << ", value = " << event.value;
+        }
+
+        socket.flush();
+        nextMonitorEvent(idx, socket);
+    });
+}
+
+void NetworkChannel::addStreamSubscription(StreamIdx idx) {
+    auto &count = streamingSubscriberCounts_[idx];
+    ++count;
+    if (count == 1) {
+        auto self = shared_from_this();
+        hw_->setStreamPacketCallback(
+            idx, [this, self, idx](const StreamPacket &packet) {
+                sendStreamPacket(idx, packet);
+            });
+    }
+}
+
+void NetworkChannel::removeStreamSubscription(StreamIdx idx) {
+    auto &count = streamingSubscriberCounts_[idx];
+    --count;
+    if (count == 0) {
+        hw_->setStreamPacketCallback(idx, nullptr);
+    }
 }
 }
