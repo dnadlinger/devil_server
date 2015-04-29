@@ -120,8 +120,14 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
     }
 
     auto serial = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
-    if (!serial) serial = "<no serial #>";
+    std::string id;
+    if (serial) {
+        id = serial;
+    } else {
+        id = "<no serial> ("s +
+             udev_device_get_property_value(dev, "ID_PATH_TAG") + ")"s;
+    }
 
-    callback(udev_device_get_devnode(dev), serial);
+    callback(udev_device_get_devnode(dev), id);
 }
 }
