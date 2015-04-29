@@ -55,7 +55,7 @@ std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
 }
 }
 
-const auto readTimeout = 0.2s;
+const auto readTimeout = 1.0s;
 }
 
 SerialConnection::SerialConnection(
@@ -165,7 +165,7 @@ void SerialConnection::mainLoop(yield_context yc) {
                 writeRegister(idx, value, yc);
             }
 
-            for (auto &idx : hw::regsToṔoll) {
+            for (auto &idx : hw::regsToPoll) {
                 const auto newVal = readRegister(idx, yc);
                 if (registerCache_[idx] != newVal) {
                     registerCache_[idx] = newVal;
