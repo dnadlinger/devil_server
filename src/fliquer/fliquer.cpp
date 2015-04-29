@@ -76,7 +76,8 @@ void Node::addLocalResource(const Resource &resource) {
                                          return;
                                      }
                                      BOOST_LOG(log_)
-                                         << "Failed to send broadcast: " << err;
+                                         << "Failed to send broadcast: "
+                                         << err.message() << "(" << err << ")";
                                  }
                              });
 }
