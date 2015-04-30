@@ -30,8 +30,8 @@ int main() {
             auto &sock = servers.back()->second;
             sock.connect("tcp://" + rr.first.to_string() + ":" +
                          to_string(rr.second.port));
-            sock.set_option(azmq::socket::snd_timeo(1));
-            sock.set_option(azmq::socket::rcv_timeo(1));
+            sock.set_option(azmq::socket::snd_timeo(1000));
+            sock.set_option(azmq::socket::rcv_timeo(1000));
         }
     });
     node->start();
