@@ -449,6 +449,11 @@ namespace detail {
             return socket_ops::monitor(impl->socket_, events, ec);
         }
 
+        boost::system::error_code close_monitor(implementation_type & impl,
+                                                boost::system::error_code & ec) {
+            return socket_ops::close_monitor(impl->socket_, ec);
+        }
+
         void format(implementation_type const& impl,
                     std::ostream & stm) {
             unique_lock l{ *impl };

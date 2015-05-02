@@ -54,7 +54,9 @@ void NetworkChannel::start() {
         for (auto &s : streamingMonitorSockets_) {
             s->cancel();
         }
-        streamingMonitorSockets_.clear();
+        for (auto &s : streamingSockets_) {
+            s->socket.close_monitor();
+        }
     });
 
     hw_->addRegisterChangeCallback([this, self](RegIdx idx, RegValue val) {

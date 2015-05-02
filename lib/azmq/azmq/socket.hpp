@@ -667,6 +667,16 @@ public:
         return res;
     }
 
+    boost::system::error_code close_monitor(boost::system::error_code & ec) {
+        return get_service().close_monitor(implementation, ec);
+    }
+
+    void close_monitor() {
+        boost::system::error_code ec;
+        if (close_monitor(ec))
+            throw boost::system::system_error(ec);
+    }
+
     friend std::ostream& operator<<(std::ostream& stm, const socket& that) {
         auto& s = const_cast<socket&>(that);
         s.get_service().format(s.implementation, stm);

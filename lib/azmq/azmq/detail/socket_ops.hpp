@@ -360,6 +360,15 @@ namespace detail {
                 ec = make_error_code();
             return addr;
         }
+
+        static boost::system::error_code close_monitor(socket_type & socket,
+                                                 boost::system::error_code & ec) {
+            BOOST_ASSERT_MSG(socket, "Invalid socket");
+            auto rc = zmq_socket_monitor(socket.get(), nullptr, 0);
+            if (rc < 0)
+                ec = make_error_code();
+            return ec;
+        }
     };
 } // namespace detail
 } // namespace azmq
