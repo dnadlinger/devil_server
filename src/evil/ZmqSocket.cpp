@@ -16,6 +16,16 @@ ZmqSocket::ZmqSocket(io_service &ioService, int type)
 
 void ZmqSocket::close() {
     socket.cancel();
-    socket.unbind(socket.endpoint());
+
+    // With ZeroMQ 4.2 from Git master, the actual endpoint address is resolved
+    // from "*" to "0.0.0.0", which is not reflected in
+    // azmq::socket::endpoint(). Thus, manually fetch the respective socket
+    // option first.
+    std::array<char, 256> endpointBuf;
+    azmq::socket::last_endpoint endpointOpt{endpointBuf.data(),
+                                            endpointBuf.size()};
+    socket.get_option(endpointOpt);
+    std::string endpointString{endpointBuf.data()};
+    socket.unbind(endpointString);
 }
 }
