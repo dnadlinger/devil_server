@@ -14,6 +14,7 @@
 #include "boost/asio/ip/udp.hpp"
 #include "boost/log/sources/logger.hpp"
 #include "msgpack/adaptor/define.hpp"
+#include "msgpack/object.hpp"
 #include "msgpack/sbuffer.hpp"
 
 namespace fliquer {
@@ -70,12 +71,17 @@ struct Resource {
     /// the resource.
     uint16_t port;
 
-    MSGPACK_DEFINE(type, id, displayName, version, port);
+    /// \brief Reserved to facilitate future protocol tweaks.
+    ///
+    /// Simply ignored and defaulted to nil by Fliquer 1.0 nodes.
+    msgpack::object reserved;
+
+    MSGPACK_DEFINE(type, id, displayName, version, port, reserved);
 
     bool operator==(const Resource &rhs) const {
         return type == rhs.type && id == rhs.id &&
                displayName == rhs.displayName && version == rhs.version &&
-               port == rhs.port;
+               port == rhs.port && reserved == rhs.reserved;
     }
 };
 
