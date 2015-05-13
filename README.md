@@ -3,12 +3,12 @@ EVIL Network Server
 
 This repository contains a server program offering control
 of multiple EVIL PID controllers over the network. It is
-intended to run on a mini-computer such as the Raspberry Pi
-that is connected directly to the EVIL boxes to offer an
-Ethernet interface to them.
+intended to run on a number of mini-computers (such as the
+Raspberry Pi) connected via USB to the EVIL boxes to offer
+an Ethernet interface to them.
 
 This project is written in "modern" C++ and will require a
-compiler that supports C++11 to build.
+compiler that supports C++14 to build.
 
 Originally written by David Nadlinger [0] for hardware
 developed by Ludwig de Clerq [1] and Vlad Negnevitsky [2]
@@ -29,8 +29,8 @@ Coding Style
 
 Apart from generally following good programming practice,
 please try to keep the code format reasonably consistent.
-Sine there is is no excuse for wasting brain-power on that
-in this day and age, clang-format [4] is used. Ideally, you
+Since there is is no excuse for wasting brain-power on that
+in this day and age, clang-format [3] is used. Ideally, you
 run it before every check-in like this:
 
     clang-format -style=file -i <files_you_changed>
