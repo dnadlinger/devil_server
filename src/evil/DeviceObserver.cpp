@@ -100,7 +100,7 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
     for (const auto &filter : target_device::properties) {
         auto p = udev_device_get_property_value(dev, filter.first);
 
-        if (!p) p = "<null>";
+        if (!p) p = "[null]";
 
         if (p != filter.second) {
             // Log why we ignored a device event for helping people to debug why
@@ -124,7 +124,7 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
     if (serial) {
         id = serial;
     } else {
-        id = "<no serial> ("s +
+        id = "[no serial] ("s +
              udev_device_get_property_value(dev, "ID_PATH_TAG") + ")"s;
     }
 
