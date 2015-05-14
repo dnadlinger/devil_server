@@ -24,7 +24,7 @@ int main() {
 
     auto node = Node::make(io, [&](const vector<RemoteResource> &rrs) {
         for (auto &rr : rrs) {
-            if (rr.second.type != "tiqi.evil.server") continue;
+            if (rr.second.type != "tiqi.devil.server") continue;
 
             servers.emplace_back(new Server(rr, azmq::socket(io, ZMQ_REQ)));
             auto &sock = servers.back()->second;
@@ -44,8 +44,8 @@ int main() {
     steady_timer timer{io};
     std::function<void()> displayStats = [&]() {
         cout << "\033c" << endl;
-        cout << "EVIL Server Status" << endl;
-        cout << "------------------" << endl;
+        cout << "DEVIL Server Status" << endl;
+        cout << "-------------------" << endl;
 
         vector<Server *> toRemove;
 

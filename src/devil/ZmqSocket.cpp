@@ -1,8 +1,8 @@
-#include "evil/ZmqSocket.hpp"
+#include "devil/ZmqSocket.hpp"
 
 using namespace boost::asio;
 
-namespace evil {
+namespace devil {
 
 ZmqSocket::ZmqSocket(io_service &ioService, int type)
     : socket{ioService, type, true} {

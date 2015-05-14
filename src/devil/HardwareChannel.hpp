@@ -1,11 +1,11 @@
-#ifndef EVIL_HARDWARECHANNEL_HPP
-#define EVIL_HARDWARECHANNEL_HPP
+#ifndef DEVIL_HARDWARECHANNEL_HPP
+#define DEVIL_HARDWARECHANNEL_HPP
 
 #include <chrono>
 #include <functional>
 #include <vector>
 
-namespace evil {
+namespace devil {
 
 using RegIdx = unsigned;
 using RegValue = uint16_t;

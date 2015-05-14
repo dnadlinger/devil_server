@@ -1,5 +1,5 @@
-EVIL Network Server
-===================
+DEVIL Server
+============
 
 This repository contains a server program offering control
 of multiple EVIL PID controllers over the network. It is

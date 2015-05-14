@@ -1,17 +1,17 @@
-#ifndef EVIL_SERVER_HPP
-#define EVIL_SERVER_HPP
+#ifndef DEVIL_SERVER_HPP
+#define DEVIL_SERVER_HPP
 
 #include <memory>
 #include <unordered_map>
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/steady_timer.hpp"
-#include "evil/DeviceObserver.hpp"
-#include "evil/NetworkChannel.hpp"
-#include "evil/PerformanceCounters.hpp"
-#include "evil/SerialConnection.hpp"
+#include "devil/DeviceObserver.hpp"
+#include "devil/NetworkChannel.hpp"
+#include "devil/PerformanceCounters.hpp"
+#include "devil/SerialConnection.hpp"
 #include "fliquer/fliquer.hpp"
 
-namespace evil {
+namespace devil {
 
 class Server : public std::enable_shared_from_this<Server> {
 public:

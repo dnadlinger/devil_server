@@ -1,9 +1,9 @@
-#ifndef EVIL_PERFORMANCECOUNTERS_HPP
-#define EVIL_PERFORMANCECOUNTERS_HPP
+#ifndef DEVIL_PERFORMANCECOUNTERS_HPP
+#define DEVIL_PERFORMANCECOUNTERS_HPP
 
 #include <cstdint>
 
-namespace evil {
+namespace devil {
 
 /// \brief Various global statistics for diagnostics purposes.
 struct PerformanceCounters {

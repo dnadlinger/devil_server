@@ -1,6 +1,6 @@
 #include "Evil2Adapter.hpp"
 
-namespace evil {
+namespace devil {
 
 namespace {
 const RegIdx channelBRegOffset = 11;

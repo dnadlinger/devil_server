@@ -1,16 +1,16 @@
-#ifndef EVIL_NETWORKCHANNEL_HPP
-#define EVIL_NETWORKCHANNEL_HPP
+#ifndef DEVIL_NETWORKCHANNEL_HPP
+#define DEVIL_NETWORKCHANNEL_HPP
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include "boost/asio/io_service.hpp"
-#include "evil/HardwareChannel.hpp"
-#include "evil/RpcInterface.hpp"
-#include "evil/ZmqSocket.hpp"
+#include "devil/HardwareChannel.hpp"
+#include "devil/RpcInterface.hpp"
+#include "devil/ZmqSocket.hpp"
 #include "msgpack.hpp"
 
-namespace evil {
+namespace devil {
 
 class NetworkChannel : public std::enable_shared_from_this<NetworkChannel> {
 public:

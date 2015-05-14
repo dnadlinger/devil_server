@@ -1,4 +1,4 @@
-#include "evil/RpcInterface.hpp"
+#include "devil/RpcInterface.hpp"
 
 #include "azmq/message.hpp"
 #include "boost/log/trivial.hpp"
@@ -7,7 +7,7 @@ using namespace boost::asio;
 using namespace boost::log;
 using namespace boost::system;
 
-namespace evil {
+namespace devil {
 
 RpcInterface::RpcInterface(io_service &ioService, RequestHandler requestHandler)
     : socket_{ioService, ZMQ_REP}, requestHandler_{requestHandler} {}

@@ -1,10 +1,10 @@
-#ifndef EVIL_EVIL2ADAPTER_HPP
-#define EVIL_EVIL2ADAPTER_HPP
+#ifndef DEVIL_EVIL2ADAPTER_HPP
+#define DEVIL_EVIL2ADAPTER_HPP
 
 #include <memory>
-#include "evil/HardwareChannel.hpp"
+#include "devil/HardwareChannel.hpp"
 
-namespace evil {
+namespace devil {
 
 class Evil2Adapter : public HardwareChannel {
 public:

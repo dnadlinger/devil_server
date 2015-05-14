@@ -1,5 +1,5 @@
-#ifndef EVIL_DEVICEOBSERVER_HPP
-#define EVIL_DEVICEOBSERVER_HPP
+#ifndef DEVIL_DEVICEOBSERVER_HPP
+#define DEVIL_DEVICEOBSERVER_HPP
 
 #include <functional>
 #include <memory>
@@ -12,7 +12,7 @@ struct udev;
 struct udev_device;
 struct udev_monitor;
 
-namespace evil {
+namespace devil {
 
 /// The udev properties of the device type to observe. Values are easy to
 /// determine using "udevadm info".

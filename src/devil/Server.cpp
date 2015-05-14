@@ -3,7 +3,7 @@
 #include <chrono>
 #include <iomanip>
 #include "boost/log/trivial.hpp"
-#include "evil/Evil2Adapter.hpp"
+#include "devil/Evil2Adapter.hpp"
 #include "msgpack.hpp"
 
 using namespace boost::asio;
@@ -31,7 +31,7 @@ std::string buildTimestamp() {
 const auto statUpdateInterval = 1s;
 }
 
-namespace evil {
+namespace devil {
 
 Server::Server(io_service &ioService, std::string serverId,
                ChannelNameMap channelNames)
@@ -117,7 +117,7 @@ void Server::registerDevice(const std::string &path,
             auto fullSerial = serial + serialExt;
 
             fliquer::Resource r;
-            r.type = "tiqi.evil.channel";
+            r.type = "tiqi.devil.channel";
             r.id = fullSerial;
             r.port = chan.rpcPort();
 
@@ -158,7 +158,7 @@ void Server::registerDevice(const std::string &path,
 
 void Server::announceSelf() {
     fliquer::Resource r;
-    r.type = "tiqi.evil.server";
+    r.type = "tiqi.devil.server";
     r.id = serverId_;
     r.displayName = serverId_;
     r.port = managementInterface_->port();

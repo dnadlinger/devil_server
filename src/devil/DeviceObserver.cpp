@@ -9,7 +9,7 @@ using namespace boost::asio;
 using namespace boost::system;
 using namespace std::literals;
 
-namespace evil {
+namespace devil {
 
 DeviceObserver::DeviceObserver(io_service &ioService,
                                DeviceCallback addCallback,

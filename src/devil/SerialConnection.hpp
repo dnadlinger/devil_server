@@ -1,5 +1,5 @@
-#ifndef EVIL_SERIALCONNECTION_HPP
-#define EVIL_SERIALCONNECTION_HPP
+#ifndef DEVIL_SERIALCONNECTION_HPP
+#define DEVIL_SERIALCONNECTION_HPP
 
 #include <array>
 #include <chrono>
@@ -10,10 +10,10 @@
 #include "boost/asio/serial_port.hpp"
 #include "boost/asio/spawn.hpp"
 #include "boost/asio/steady_timer.hpp"
-#include "evil/HardwareChannel.hpp"
-#include "evil/PerformanceCounters.hpp"
+#include "devil/HardwareChannel.hpp"
+#include "devil/PerformanceCounters.hpp"
 
-namespace evil {
+namespace devil {
 
 class SerialConnection : public HardwareChannel,
                          public std::enable_shared_from_this<SerialConnection> {

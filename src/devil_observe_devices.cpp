@@ -1,11 +1,11 @@
 #include <iostream>
 #include "boost/asio/io_service.hpp"
-#include "evil/DeviceObserver.hpp"
+#include "devil/DeviceObserver.hpp"
 
 int main() {
     boost::asio::io_service io;
 
-    auto observer = evil::DeviceObserver::make(
+    auto observer = devil::DeviceObserver::make(
         io,
         [](auto path, auto serial) {
             std::cout << " :: Device plugged in: " << path

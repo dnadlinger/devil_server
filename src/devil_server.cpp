@@ -8,7 +8,7 @@
 #include "boost/log/trivial.hpp"
 #include "boost/property_tree/ptree.hpp"
 #include "boost/property_tree/json_parser.hpp"
-#include "evil/Server.hpp"
+#include "devil/Server.hpp"
 
 using namespace boost::asio;
 using namespace boost::system;
@@ -16,7 +16,7 @@ using namespace std::literals;
 
 namespace {
 
-const auto configFileName = "evil_server.json";
+const auto configFileName = "devil_server.json";
 
 struct Config {
     std::string serverId;
@@ -59,7 +59,7 @@ int main() {
         return 1;
     }
 
-    auto server = evil::Server::make(io, config.serverId, config.channelNames);
+    auto server = devil::Server::make(io, config.serverId, config.channelNames);
     server->start();
 
     signal_set shutdownSignals{io};

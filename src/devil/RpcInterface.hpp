@@ -1,10 +1,10 @@
-#ifndef EVIL_RPCINTERFACE_HPP
-#define EVIL_RPCINTERFACE_HPP
+#ifndef DEVIL_RPCINTERFACE_HPP
+#define DEVIL_RPCINTERFACE_HPP
 
 #include <functional>
 #include <memory>
 #include <string>
-#include "evil/ZmqSocket.hpp"
+#include "devil/ZmqSocket.hpp"
 #include "msgpack.hpp"
 
 namespace msgpackrpc {
@@ -13,7 +13,7 @@ const unsigned reply = 1;
 const unsigned notification = 2;
 }
 
-namespace evil {
+namespace devil {
 class RpcInterface : public std::enable_shared_from_this<RpcInterface> {
 public:
     using RequestHandler =

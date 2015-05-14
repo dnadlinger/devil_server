@@ -1,4 +1,4 @@
-#include "evil/NetworkChannel.hpp"
+#include "devil/NetworkChannel.hpp"
 
 #include <chrono>
 #include "boost/log/trivial.hpp"
@@ -8,7 +8,7 @@ using namespace boost::log;
 using namespace boost::system;
 using namespace std::literals;
 
-namespace evil {
+namespace devil {
 
 namespace {
 namespace methods {

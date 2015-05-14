@@ -9,7 +9,7 @@ using namespace boost::asio;
 using namespace boost::system;
 using namespace std::literals;
 
-namespace evil {
+namespace devil {
 
 namespace {
 namespace hw {
