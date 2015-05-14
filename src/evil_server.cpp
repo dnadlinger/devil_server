@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -27,7 +28,7 @@ Config readConfig() {
 
     if (!boost::filesystem::exists(configFileName)) {
         Config c;
-        c.serverId = "<unnamed>";
+        c.serverId = "[unnamed]";
         return c;
     }
 
@@ -48,7 +49,15 @@ Config readConfig() {
 int main() {
     io_service io;
 
-    const auto config = readConfig();
+    Config config;
+
+    try {
+        config = readConfig();
+    } catch (std::runtime_error &err) {
+        BOOST_LOG_TRIVIAL(fatal)
+            << "Malformed configuration file: " << err.what();
+        return 1;
+    }
 
     auto server = evil::Server::make(io, config.serverId, config.channelNames);
     server->start();
