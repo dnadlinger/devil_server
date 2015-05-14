@@ -124,8 +124,24 @@ void DeviceObserver::invokeIfMatch(DeviceCallback callback, udev_device *dev) {
     if (serial) {
         id = serial;
     } else {
-        id = "[no serial] ("s +
-             udev_device_get_property_value(dev, "ID_PATH_TAG") + ")"s;
+        // We need to graciously handle missing serial numbers because the
+        // serial comms chip EEPROM in some first-generation EVILs cannot be
+        // flashed and comes empty by default.
+        id = "[no serial] (";
+
+        // Prefer the path tag as it corresponds to the physical port to which
+        // the device is connected. However, on an ODROID-C1, udev does not
+        // report a path tag for devices connected to an external USB 3.0 hub,
+        // so we fall back to the /dev node corresponding to the device.
+        const auto physPath =
+            udev_device_get_property_value(dev, "ID_PATH_TAG");
+        if (physPath) {
+            id += physPath;
+        } else {
+            id += udev_device_get_devnode(dev);
+        }
+
+        id += ")";
     }
 
     callback(udev_device_get_devnode(dev), id);
