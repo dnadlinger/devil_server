@@ -40,8 +40,8 @@ Server::Server(io_service &ioService, std::string serverId,
       deviceObserver_{DeviceObserver::make(
           ioService,
           [&](std::string path, std::string serial) {
-              BOOST_LOG_TRIVIAL(info) << "EVIL connected at " << path
-                                      << " (serial: " << serial << ")";
+              BOOST_LOG_TRIVIAL(info) << path << ": EVIL connected, serial '"
+                                      << serial << "'";
 
               auto conn = SerialConnection::make(ioService_, path,
                                                  performanceCounters_);
@@ -109,9 +109,8 @@ void Server::registerDevice(const std::string &path,
                             std::shared_ptr<SerialConnection> conn,
                             const std::string &serial, uint16_t versionMajor,
                             uint8_t versionMinor) {
-    BOOST_LOG_TRIVIAL(info) << "Established connection to EVIL at " << path
-                            << ": version " << +versionMajor << '.'
-                            << +versionMinor;
+    BOOST_LOG_TRIVIAL(info) << path << ": Established connection, version "
+                            << +versionMajor << '.' << +versionMinor;
     const auto announce =
         [&](const NetworkChannel &chan, std::string serialExt = "") {
             auto fullSerial = serial + serialExt;
@@ -151,8 +150,9 @@ void Server::registerDevice(const std::string &path,
         chanB->start();
         announce(*chanB, ":B");
     } else {
-        BOOST_LOG_TRIVIAL(warning) << "Do not know how to handle version "
-                                   << +versionMajor << "." << +versionMinor;
+        BOOST_LOG_TRIVIAL(warning)
+            << path << ": Do not know how to handle version " << +versionMajor
+            << "." << +versionMinor;
     }
 }
 
