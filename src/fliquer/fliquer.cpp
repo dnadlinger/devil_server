@@ -21,7 +21,7 @@ const auto resources = "resources"s;
 namespace fliquer {
 
 std::ostream &operator<<(std::ostream &str, const SemVer &s) {
-    str << s.major << '.' << s.minor;
+    str << s.major << '.' << s.minor << '.' << s.patch;
     if (!s.preRelease.empty()) str << '-' << s.preRelease;
     if (!s.buildMetadata.empty()) str << '+' << s.buildMetadata;
     return str;
