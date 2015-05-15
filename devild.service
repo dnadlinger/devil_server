@@ -1,0 +1,14 @@
+# This is a systemd unit file for the DEVIL server, devild.
+
+[Unit]
+Description=DEVIL Server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/devild
+WorkingDirectory=/usr/local/etc
+Restart=always
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
