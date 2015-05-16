@@ -12,6 +12,7 @@ namespace devil {
 
 namespace {
 namespace methods {
+const auto ping = "ping"s;
 const auto readRegister = "readRegister"s;
 const auto modifyRegister = "modifyRegister"s;
 const auto notificationPort = "notificationPort"s;
@@ -83,6 +84,13 @@ void NetworkChannel::stop() {
 bool NetworkChannel::processRpcCommand(const std::string &method,
                                        msgpack::object &params) {
     using NoParams = msgpack::type::tuple<>;
+
+    if (method == methods::ping) {
+        params.as<NoParams>();
+        rpcInterface_->sendSuccessResponse();
+        return true;
+    }
+
     if (method == methods::readRegister) {
         const auto regIdx =
             std::get<0>(params.as<msgpack::type::tuple<RegIdx>>());
@@ -164,6 +172,7 @@ bool NetworkChannel::processRpcCommand(const std::string &method,
         rpcInterface_->sendSuccessResponse();
         return true;
     }
+
     return false;
 }
 
