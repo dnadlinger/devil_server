@@ -18,38 +18,36 @@ namespace {
 
 const auto configFileName = "devild.json";
 
-struct Config {
-    std::string serverId;
-    std::unordered_map<std::string, std::string> channelNames;
-};
-
-Config readConfig() {
+devil::Server::Config readConfig() {
     using namespace boost::property_tree;
 
     if (!boost::filesystem::exists(configFileName)) {
-        Config c;
-        c.serverId = "[unnamed]";
+        devil::Server::Config c;
+        c.id = "(noserverid)";
+        c.displayName = "(no name configured)";
         return c;
     }
 
     ptree tree;
     read_json(configFileName, tree);
 
-    std::string serverId = tree.get_child("serverId").data();
+    const auto serverId = tree.get_child("serverId").data();
+    const auto serverDisplayName = tree.get_child("serverDisplayName").data();
 
     std::unordered_map<std::string, std::string> channelNames;
     for (const auto &id : tree.get_child("channelNames")) {
         channelNames[id.first] = id.second.data();
     }
 
-    return {std::move(serverId), std::move(channelNames)};
+    return {std::move(serverId), std::move(serverDisplayName),
+            std::move(channelNames)};
 }
 }
 
 int main() {
     io_service io;
 
-    Config config;
+    devil::Server::Config config;
 
     try {
         config = readConfig();
@@ -59,7 +57,7 @@ int main() {
         return 1;
     }
 
-    auto server = devil::Server::make(io, config.serverId, config.channelNames);
+    auto server = devil::Server::make(io, config);
     server->start();
 
     signal_set shutdownSignals{io};
@@ -71,7 +69,7 @@ int main() {
         server->stop();
     });
 
-    BOOST_LOG_TRIVIAL(info) << "Server started.";
+    BOOST_LOG_TRIVIAL(info) << "Server '" << config.displayName << "' started.";
     io.run();
 
     BOOST_LOG_TRIVIAL(info) << "Shutdown completed.";

@@ -15,12 +15,17 @@ namespace devil {
 
 class Server : public std::enable_shared_from_this<Server> {
 public:
+    struct Config {
+        std::string id;
+        std::string displayName;
+        std::unordered_map<std::string, std::string> channelNames;
+    };
+
     using ChannelNameMap = std::unordered_map<std::string, std::string>;
     static std::shared_ptr<Server> make(boost::asio::io_service &ioService,
-                                        std::string serverId,
-                                        ChannelNameMap channelNames) {
-        return std::shared_ptr<Server>(new Server(
-            ioService, std::move(serverId), std::move(channelNames)));
+                                        Config config) {
+        return std::shared_ptr<Server>(
+            new Server(ioService, std::move(config)));
     }
 
     void start();
@@ -28,8 +33,7 @@ public:
     void stop();
 
 private:
-    Server(boost::asio::io_service &ioService, std::string serverId,
-           ChannelNameMap channelNames);
+    Server(boost::asio::io_service &ioService, Config config);
 
     void registerDevice(const std::string &path,
                         std::shared_ptr<SerialConnection> conn,
@@ -41,8 +45,7 @@ private:
     void updatePerformanceStats();
 
     boost::asio::io_service &ioService_;
-    const std::string serverId_;
-    ChannelNameMap channelNames_;
+    const Config config_;
 
     std::shared_ptr<DeviceObserver> deviceObserver_;
     std::shared_ptr<fliquer::Node> fliquer_;

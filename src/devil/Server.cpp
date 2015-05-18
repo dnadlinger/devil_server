@@ -33,10 +33,8 @@ const auto statUpdateInterval = 1s;
 
 namespace devil {
 
-Server::Server(io_service &ioService, std::string serverId,
-               ChannelNameMap channelNames)
-    : ioService_{ioService}, serverId_{std::move(serverId)},
-      channelNames_{std::move(channelNames)},
+Server::Server(io_service &ioService, Server::Config config)
+    : ioService_{ioService}, config_(std::move(config)),
       deviceObserver_{DeviceObserver::make(
           ioService,
           [&](std::string path, std::string serial) {
@@ -125,8 +123,12 @@ void Server::registerDevice(const std::string &path,
             v.minor = versionMinor;
             r.version = v;
 
-            const auto prettyName = channelNames_[fullSerial];
-            r.displayName = prettyName.empty() ? fullSerial : prettyName;
+            const auto nameIt = config_.channelNames.find(fullSerial);
+            if (nameIt == config_.channelNames.end()) {
+                r.displayName = fullSerial;
+            } else {
+                r.displayName = nameIt->second;
+            }
 
             fliquer_->addLocalResource(r);
 
@@ -159,8 +161,8 @@ void Server::registerDevice(const std::string &path,
 void Server::announceSelf() {
     fliquer::Resource r;
     r.type = "tiqi.devil.server";
-    r.id = serverId_;
-    r.displayName = serverId_;
+    r.id = config_.id;
+    r.displayName = config_.displayName;
     r.port = managementInterface_->port();
 
     r.version.major = 1;

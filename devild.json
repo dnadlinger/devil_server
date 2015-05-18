@@ -1,5 +1,6 @@
 {
-	"serverId": "Name identifying the server instance for diagnostic tools",
+	"serverId": "servid",
+	"serverDisplayName": "Human-readable server name for diagnostics",
 	"channelNames": {
 		"<evilserialnumber>:<channelid>": "Name to display for the channel"
 	}
