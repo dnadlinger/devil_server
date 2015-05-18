@@ -16,7 +16,7 @@ using namespace std::literals;
 
 namespace {
 
-const auto configFileName = "devil_server.json";
+const auto configFileName = "devild.json";
 
 struct Config {
     std::string serverId;
