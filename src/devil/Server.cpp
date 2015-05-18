@@ -37,6 +37,7 @@ Server::Server(io_service &ioService, Server::Config config)
     : ioService_{ioService}, config_(std::move(config)),
       deviceObserver_{DeviceObserver::make(
           ioService,
+          config_.id,
           [&](std::string path, std::string serial) {
               BOOST_LOG_TRIVIAL(info) << path << ": EVIL connected, serial '"
                                       << serial << "'";

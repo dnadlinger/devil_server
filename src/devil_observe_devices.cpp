@@ -7,6 +7,7 @@ int main() {
 
     auto observer = devil::DeviceObserver::make(
         io,
+        "local",
         [](auto path, auto serial) {
             std::cout << " :: Device plugged in: " << path
                       << " (serial: " << serial << ")" << std::endl;

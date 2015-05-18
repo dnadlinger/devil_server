@@ -31,10 +31,10 @@ public:
         std::function<void(const std::string &, const std::string &)>;
 
     static std::shared_ptr<DeviceObserver>
-    make(boost::asio::io_service &ioService, DeviceCallback addCallback,
-         DeviceCallback removeCallback) {
-        return std::shared_ptr<DeviceObserver>(
-            new DeviceObserver(ioService, addCallback, removeCallback));
+    make(boost::asio::io_service &ioService, std::string unnamedPrefix,
+         DeviceCallback addCallback, DeviceCallback removeCallback) {
+        return std::shared_ptr<DeviceObserver>(new DeviceObserver(
+            ioService, unnamedPrefix, addCallback, removeCallback));
     }
 
     ~DeviceObserver();
@@ -47,13 +47,18 @@ public:
 
 private:
     DeviceObserver(boost::asio::io_service &ioService,
-                   DeviceCallback addCallback, DeviceCallback removeCallback);
+                   std::string unnamedPrefix, DeviceCallback addCallback,
+                   DeviceCallback removeCallback);
 
     void receiveEvent();
 
     void handleDeviceEvent(udev_device *dev);
 
     void invokeIfMatch(DeviceCallback callback, udev_device *dev);
+
+    // Prefix to use if no hardware serial number is present. Ideally identifies
+    // the host machine somehow.
+    const std::string noSerialPrefix_;
 
     DeviceCallback addCallback_;
     DeviceCallback removeCallback_;
