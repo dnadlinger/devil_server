@@ -142,9 +142,10 @@ void SerialConnection::realignProtocol(yield_context yc) {
     std::fill(noops.begin(), noops.end(), hw::commands::noop);
     async_write(port_, buffer(noops), yc);
 
-    // Now, read any garbage the device might send in response.
+    // Now, read any garbage the device might send in response. We'll keep
+    // trying to read until the timeout is hit.
     armTimeout(5 * readTimeout);
-    std::array<uint8_t, 1> garbage;
+    std::array<uint8_t, 1024> garbage;
     try {
         while (true) {
             async_read(port_, buffer(garbage), yc);

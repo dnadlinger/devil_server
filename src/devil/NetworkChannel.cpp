@@ -141,7 +141,8 @@ bool NetworkChannel::processRpcCommand(const std::string &method,
             return true;
         }
 
-        // What channel we use here does not matter.
+        // What channel we use here does not matter as we always set all to the
+        // same config anyway.
         const auto config = hw_->streamAcquisitionConfig(0);
         rpcInterface_->sendSuccessResponse(
             msgpack::type::tuple<double, unsigned>(config.timeSpan / 1s,
