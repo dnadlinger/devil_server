@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include "boost/asio/io_service.hpp"
+#include "boost/asio/steady_timer.hpp"
 #include "devil/HardwareChannel.hpp"
 #include "devil/RpcInterface.hpp"
 #include "devil/ZmqSocket.hpp"
@@ -38,7 +39,8 @@ private:
 
     void sendStreamPacket(StreamIdx idx, const StreamPacket &packet);
 
-    void nextMonitorEvent(StreamIdx idx, azmq::socket &socket);
+    void nextStreamingMonitorTimer();
+    void processMonitorEvents(StreamIdx idx, azmq::socket &socket);
 
     void addStreamSubscription(StreamIdx idx);
     void removeStreamSubscription(StreamIdx idx);
@@ -50,6 +52,7 @@ private:
     ZmqSocket notificationSocket_;
     std::vector<std::unique_ptr<ZmqSocket>> streamingSockets_;
     std::vector<std::unique_ptr<azmq::socket>> streamingMonitorSockets_;
+    boost::asio::steady_timer streamingMonitorTimer_;
     std::vector<size_t> streamingSubscriberCounts_;
 
     /// Buffer for sending notifications. Only ever used while sendNotification
