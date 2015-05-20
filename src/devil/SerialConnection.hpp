@@ -63,9 +63,9 @@ private:
     void writeRegister(RegIdx idx, RegValue value,
                        boost::asio::yield_context yc);
 
-    StreamPacket readStreamPacket(StreamIdx idx,
-                                  const StreamAcquisitionConfig &config,
-                                  boost::asio::yield_context yc);
+    std::pair<bool, StreamPacket>
+    readStreamPacket(StreamIdx idx, const StreamAcquisitionConfig &config,
+                     boost::asio::yield_context yc);
 
     void armTimeout(std::chrono::duration<double> duration);
 

@@ -189,9 +189,21 @@ void SerialConnection::mainLoop(yield_context yc) {
             if (nextStreamIdx_ < streamCount_) {
                 const auto &cb = streamPacketCallbacks_[nextStreamIdx_];
                 if (cb) {
-                    auto packet = readStreamPacket(
+                    auto streamResult = readStreamPacket(
                         nextStreamIdx_, streamConfigs_[nextStreamIdx_], yc);
-                    if (cb) cb(packet);
+                    if (!streamResult.first) {
+                        BOOST_LOG_TRIVIAL(info)
+                            << devicePath_
+                            << ": Received corrupt stream data, trying "
+                               "to rescue connection.";
+                        realignProtocol(yc);
+                        continue;
+                    }
+
+                    // Need to re-check cb because it might have been reset
+                    // in the meantime if we yielded execution waiting for the
+                    // data to arrive.
+                    if (cb) cb(streamResult.second);
                 }
 
                 // Before acquiring the next stream packet, check if there are
@@ -299,7 +311,7 @@ void SerialConnection::writeRegister(RegIdx idx, RegValue value,
     ++performanceCounters_->serialCommandsSent;
 }
 
-StreamPacket SerialConnection::readStreamPacket(
+std::pair<bool, StreamPacket> SerialConnection::readStreamPacket(
     StreamIdx idx, const StreamAcquisitionConfig &config, yield_context yc) {
 
     auto &countCache = registerCache_[hw::special_regs::streamSampleCount];
@@ -316,7 +328,7 @@ StreamPacket SerialConnection::readStreamPacket(
         writeRegister(hw::special_regs::streamInterval, intervalCache, yc);
     }
 
-    const auto actualInterval = hw::sampleIntervalFromReg(intervalReg);
+    StreamPacket result{hw::sampleIntervalFromReg(intervalReg), 0, streamBuf_};
 
     std::array<uint8_t, 1> writeBuf;
     writeBuf[0] = hw::commands::readFromStream | idx;
@@ -326,7 +338,7 @@ StreamPacket SerialConnection::readStreamPacket(
     // Initialization value does not matter, will get overwritten anyway.
     streamBuf_.resize(config.sampleCount, 0);
 
-    armTimeout(actualInterval * config.sampleCount + readTimeout);
+    armTimeout(result.sampleInterval * config.sampleCount + readTimeout);
     async_read(port_, buffer(streamBuf_), yc);
     performanceCounters_->serialBytesReceived += streamBuf_.size();
     timeout_.cancel();
@@ -335,11 +347,14 @@ StreamPacket SerialConnection::readStreamPacket(
     // sample counter, which counts down to zero. Since this is a bit backwards
     // to the concept of an offset/slice, convert to an index based at the first
     // sample here.
-    const auto triggerOffset =
-        config.sampleCount -
+    const auto triggerReg =
         readRegister(hw::special_regs::streamTriggerOffset, yc);
+    result.triggerOffset = config.sampleCount - triggerReg;
 
-    return {actualInterval, triggerOffset, streamBuf_};
+    // If the trigger register value is larger than the amount of samples
+    // we took, there was definitely a communication glitch.
+    const auto valid = (triggerReg <= config.sampleCount);
+    return {valid, result};
 }
 
 void SerialConnection::armTimeout(std::chrono::duration<double> duration) {
