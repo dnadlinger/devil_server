@@ -14,6 +14,8 @@ namespace devil {
 namespace {
 namespace hw {
 
+/// The command opcodes from the EVIL protocol (see Verilog decoder source for
+/// documentation).
 namespace commands {
 const uint8_t readFromReg = 0x0 << 5;
 const uint8_t writeToReg = 0x1 << 5;
@@ -31,6 +33,8 @@ const RegIdx systemCondition = 30;
 const RegIdx version = 31;
 }
 
+/// The registers that are changed by the hardware side and thus need to be
+/// polled actively.
 const std::array<RegIdx, 1> regsToPoll = {{special_regs::systemCondition}};
 
 bool isSpecialReg(RegIdx idx) {

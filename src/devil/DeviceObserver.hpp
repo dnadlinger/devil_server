@@ -31,10 +31,10 @@ public:
         std::function<void(const std::string &, const std::string &)>;
 
     static std::shared_ptr<DeviceObserver>
-    make(boost::asio::io_service &ioService, std::string unnamedPrefix,
+    make(boost::asio::io_service &ioService, std::string noSerialPrefix,
          DeviceCallback addCallback, DeviceCallback removeCallback) {
         return std::shared_ptr<DeviceObserver>(new DeviceObserver(
-            ioService, unnamedPrefix, addCallback, removeCallback));
+            ioService, noSerialPrefix, addCallback, removeCallback));
     }
 
     ~DeviceObserver();
@@ -47,7 +47,7 @@ public:
 
 private:
     DeviceObserver(boost::asio::io_service &ioService,
-                   std::string unnamedPrefix, DeviceCallback addCallback,
+                   std::string noSerialPrefix, DeviceCallback addCallback,
                    DeviceCallback removeCallback);
 
     void receiveEvent();
