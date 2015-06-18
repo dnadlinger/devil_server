@@ -1,4 +1,4 @@
-#include "SerialConnection.hpp"
+#include "SerialChannel.hpp"
 
 #include <algorithm>
 #include "boost/asio/read.hpp"
@@ -62,7 +62,7 @@ std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
 const auto readTimeout = 1.0s;
 }
 
-SerialConnection::SerialConnection(
+SerialChannel::SerialChannel(
     io_service &ioService, std::string devicePath,
     std::shared_ptr<PerformanceCounters> performanceCounters)
     : devicePath_{std::move(devicePath)}, port_{ioService, devicePath_},
@@ -79,7 +79,7 @@ SerialConnection::SerialConnection(
     nextStreamIdx_ = 0;
 }
 
-void SerialConnection::start(InitializedCallback initializedCallback) {
+void SerialChannel::start(InitializedCallback initializedCallback) {
     auto self = shared_from_this();
     spawn(port_.get_io_service(), [this, self, initializedCallback](
                                       yield_context yc) {
@@ -138,7 +138,7 @@ void SerialConnection::start(InitializedCallback initializedCallback) {
     });
 }
 
-void SerialConnection::realignProtocol(yield_context yc) {
+void SerialChannel::realignProtocol(yield_context yc) {
     // Write some 1-byte no-ops to complete any partially transmitted multi-byte
     // commands. In theory, 2 bytes should be enough since our longest commands
     // are 3 bytes, but the exact amount is inconsequential.
@@ -160,7 +160,7 @@ void SerialConnection::realignProtocol(yield_context yc) {
     }
 }
 
-void SerialConnection::mainLoop(yield_context yc) {
+void SerialChannel::mainLoop(yield_context yc) {
     while (!shuttingDown_) {
         try {
             while (!pendingRegisterWrites_.empty()) {
@@ -232,26 +232,26 @@ void SerialConnection::mainLoop(yield_context yc) {
     }
 }
 
-void SerialConnection::stop() {
+void SerialChannel::stop() {
     shuttingDown_ = true;
     port_.cancel();
 }
 
-void SerialConnection::addShutdownCallback(ShutdownCallback cb) {
+void SerialChannel::addShutdownCallback(ShutdownCallback cb) {
     shutdownCallbacks_.push_back(cb);
 }
 
-bool SerialConnection::isValidRegister(RegIdx idx) {
+bool SerialChannel::isValidRegister(RegIdx idx) {
     return idx < registerCount_ && !hw::isSpecialReg(idx);
 }
 
-RegValue SerialConnection::readRegister(RegIdx idx) {
+RegValue SerialChannel::readRegister(RegIdx idx) {
     assert(isValidRegister(idx) && "Not a valid register.");
     return registerCache_[idx];
 }
 
-bool SerialConnection::modifyRegister(RegIdx idx, RegValue oldVal,
-                                      RegValue newVal) {
+bool SerialChannel::modifyRegister(RegIdx idx, RegValue oldVal,
+                                   RegValue newVal) {
     // Sanity check: Client is never allowed to modify special registers…
     if (hw::isSpecialReg(idx)) return false;
 
@@ -268,28 +268,27 @@ bool SerialConnection::modifyRegister(RegIdx idx, RegValue oldVal,
     return true;
 }
 
-void SerialConnection::addRegisterChangeCallback(RegisterChangeCallback cb) {
+void SerialChannel::addRegisterChangeCallback(RegisterChangeCallback cb) {
     registerChangeCallbacks_.push_back(cb);
 }
 
-StreamIdx SerialConnection::streamCount() { return streamCount_; }
+StreamIdx SerialChannel::streamCount() { return streamCount_; }
 
-StreamAcquisitionConfig
-SerialConnection::streamAcquisitionConfig(StreamIdx idx) {
+StreamAcquisitionConfig SerialChannel::streamAcquisitionConfig(StreamIdx idx) {
     return streamConfigs_[idx];
 }
 
-void SerialConnection::setStreamAcquisitionConfig(
+void SerialChannel::setStreamAcquisitionConfig(
     StreamIdx idx, const StreamAcquisitionConfig &config) {
     streamConfigs_[idx] = config;
 }
 
-void SerialConnection::setStreamPacketCallback(StreamIdx idx,
-                                               StreamPacketCallback cb) {
+void SerialChannel::setStreamPacketCallback(StreamIdx idx,
+                                            StreamPacketCallback cb) {
     streamPacketCallbacks_[idx] = cb;
 }
 
-RegValue SerialConnection::readRegister(RegIdx idx, yield_context yc) {
+RegValue SerialChannel::readRegister(RegIdx idx, yield_context yc) {
     std::array<uint8_t, 1> writeBuf;
     writeBuf[0] = hw::commands::readFromReg | idx;
     async_write(port_, buffer(writeBuf), yc);
@@ -305,8 +304,8 @@ RegValue SerialConnection::readRegister(RegIdx idx, yield_context yc) {
     return readBuf[0];
 }
 
-void SerialConnection::writeRegister(RegIdx idx, RegValue value,
-                                     yield_context yc) {
+void SerialChannel::writeRegister(RegIdx idx, RegValue value,
+                                  yield_context yc) {
     std::array<uint8_t, 3> writeBuf;
     writeBuf[0] = hw::commands::writeToReg | idx;
     writeBuf[1] = static_cast<uint8_t>(value);
@@ -315,7 +314,7 @@ void SerialConnection::writeRegister(RegIdx idx, RegValue value,
     ++performanceCounters_->serialCommandsSent;
 }
 
-std::pair<bool, StreamPacket> SerialConnection::readStreamPacket(
+std::pair<bool, StreamPacket> SerialChannel::readStreamPacket(
     StreamIdx idx, const StreamAcquisitionConfig &config, yield_context yc) {
 
     auto &countCache = registerCache_[hw::special_regs::streamSampleCount];
@@ -361,7 +360,7 @@ std::pair<bool, StreamPacket> SerialConnection::readStreamPacket(
     return {valid, result};
 }
 
-void SerialConnection::armTimeout(std::chrono::duration<double> duration) {
+void SerialChannel::armTimeout(std::chrono::duration<double> duration) {
     timeout_.expires_from_now(
         std::chrono::duration_cast<std::chrono::nanoseconds>(duration));
 

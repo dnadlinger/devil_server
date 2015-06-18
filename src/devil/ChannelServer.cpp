@@ -1,4 +1,4 @@
-#include "devil/NetworkChannel.hpp"
+#include "devil/ChannelServer.hpp"
 
 #include <chrono>
 #include "boost/log/trivial.hpp"
@@ -32,8 +32,7 @@ const auto int8Array = 1;
 }
 }
 
-NetworkChannel::NetworkChannel(io_service &ioService,
-                               std::shared_ptr<HardwareChannel> hw)
+ChannelServer::ChannelServer(io_service &ioService, std::shared_ptr<Channel> hw)
     : ioService_{ioService}, hw_{std::move(hw)},
       notificationSocket_{ioService, ZMQ_PUB},
       streamingMonitorTimer_{ioService} {
@@ -42,7 +41,7 @@ NetworkChannel::NetworkChannel(io_service &ioService,
     }
 }
 
-void NetworkChannel::start() {
+void ChannelServer::start() {
     auto self = shared_from_this();
     rpcInterface_ =
         RpcInterface::make(ioService_, [this, self](const std::string &method,
@@ -78,14 +77,14 @@ void NetworkChannel::start() {
     rpcInterface_->start();
 }
 
-void NetworkChannel::stop() {
+void ChannelServer::stop() {
     // Just stop hw, we'll do our cleanup in the shutdown callback we
     // registered with it.
     hw_->stop();
 }
 
-bool NetworkChannel::processRpcCommand(const std::string &method,
-                                       msgpack::object &params) {
+bool ChannelServer::processRpcCommand(const std::string &method,
+                                      msgpack::object &params) {
     using NoParams = msgpack::type::tuple<>;
 
     if (method == methods::ping) {
@@ -181,7 +180,7 @@ bool NetworkChannel::processRpcCommand(const std::string &method,
 }
 
 template <typename... T>
-void NetworkChannel::sendNotification(const std::string &name, T &&... values) {
+void ChannelServer::sendNotification(const std::string &name, T &&... values) {
     notificationBuf_.clear();
 
     using Values = msgpack::type::tuple<T...>;
@@ -193,8 +192,8 @@ void NetworkChannel::sendNotification(const std::string &name, T &&... values) {
         buffer(notificationBuf_.data(), notificationBuf_.size()));
 }
 
-void NetworkChannel::sendStreamPacket(StreamIdx idx,
-                                      const StreamPacket &packet) {
+void ChannelServer::sendStreamPacket(StreamIdx idx,
+                                     const StreamPacket &packet) {
     assert(idx < streamingSockets_.size() &&
            "Invalid streaming channel index.");
 
@@ -239,7 +238,7 @@ struct MonitorEvent {
 #pragma options align = reset
 }
 
-void NetworkChannel::nextStreamingMonitorTimer() {
+void ChannelServer::nextStreamingMonitorTimer() {
     // We manually check for new monitor events a timer instead of using
     // async_receive because the latter relies on continuously polling, which
     // leads to 100% CPU utilization (as the socket uses the inproc transport).
@@ -260,7 +259,7 @@ void NetworkChannel::nextStreamingMonitorTimer() {
     });
 }
 
-void NetworkChannel::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
+void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
     while (true) {
         azmq::message msg;
         error_code ec;
@@ -303,7 +302,7 @@ void NetworkChannel::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
     }
 }
 
-void NetworkChannel::addStreamSubscription(StreamIdx idx) {
+void ChannelServer::addStreamSubscription(StreamIdx idx) {
     auto &count = streamingSubscriberCounts_[idx];
     ++count;
     if (count == 1) {
@@ -315,7 +314,7 @@ void NetworkChannel::addStreamSubscription(StreamIdx idx) {
     }
 }
 
-void NetworkChannel::removeStreamSubscription(StreamIdx idx) {
+void ChannelServer::removeStreamSubscription(StreamIdx idx) {
     auto &count = streamingSubscriberCounts_[idx];
     --count;
     if (count == 0) {

@@ -6,9 +6,9 @@
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "devil/DeviceObserver.hpp"
-#include "devil/NetworkChannel.hpp"
+#include "devil/ChannelServer.hpp"
 #include "devil/PerformanceCounters.hpp"
-#include "devil/SerialConnection.hpp"
+#include "devil/SerialChannel.hpp"
 #include "fliquer/fliquer.hpp"
 
 namespace devil {
@@ -36,7 +36,7 @@ private:
     Server(boost::asio::io_service &ioService, Config config);
 
     void registerDevice(const std::string &path,
-                        std::shared_ptr<SerialConnection> conn,
+                        std::shared_ptr<SerialChannel> conn,
                         const std::string &serial, uint16_t versionMajor,
                         uint8_t versionMinor);
 
@@ -50,7 +50,7 @@ private:
     std::shared_ptr<DeviceObserver> deviceObserver_;
     std::shared_ptr<fliquer::Node> fliquer_;
 
-    std::vector<std::shared_ptr<SerialConnection>> activeDevices_;
+    std::vector<std::shared_ptr<SerialChannel>> activeDevices_;
 
     std::shared_ptr<PerformanceCounters> performanceCounters_;
     std::unordered_map<std::string, double> performanceStats_;

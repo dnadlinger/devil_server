@@ -3,7 +3,7 @@
 #include <chrono>
 #include <iomanip>
 #include "boost/log/trivial.hpp"
-#include "devil/Evil2Adapter.hpp"
+#include "devil/DualChannelAdapter.hpp"
 #include "msgpack.hpp"
 
 using namespace boost::asio;
@@ -36,14 +36,13 @@ namespace devil {
 Server::Server(io_service &ioService, Server::Config config)
     : ioService_{ioService}, config_(std::move(config)),
       deviceObserver_{DeviceObserver::make(
-          ioService,
-          config_.id,
+          ioService, config_.id,
           [&](std::string path, std::string serial) {
               BOOST_LOG_TRIVIAL(info) << path << ": EVIL connected, serial '"
                                       << serial << "'";
 
-              auto conn = SerialConnection::make(ioService_, path,
-                                                 performanceCounters_);
+              auto conn =
+                  SerialChannel::make(ioService_, path, performanceCounters_);
               activeDevices_.push_back(conn);
 
               // Remove the connection from the list when it shuts down so the
@@ -67,7 +66,7 @@ Server::Server(io_service &ioService, Server::Config config)
           },
           [&](std::string path, std::string serial) {
               // Right now, we just let the serial read fail and clean up our
-              // side of things in the SerialConnection shutdown callback.
+              // side of things in the SerialChannel shutdown callback.
               (void)path;
               (void)serial;
           })},
@@ -105,13 +104,13 @@ void Server::stop() {
 }
 
 void Server::registerDevice(const std::string &path,
-                            std::shared_ptr<SerialConnection> conn,
+                            std::shared_ptr<SerialChannel> conn,
                             const std::string &serial, uint16_t versionMajor,
                             uint8_t versionMinor) {
     BOOST_LOG_TRIVIAL(info) << path << ": Established connection, version "
                             << +versionMajor << '.' << +versionMinor;
     const auto announce =
-        [&](const NetworkChannel &chan, std::string serialExt = "") {
+        [&](const ChannelServer &chan, std::string serialExt = "") {
             auto fullSerial = serial + serialExt;
 
             fliquer::Resource r;
@@ -139,17 +138,19 @@ void Server::registerDevice(const std::string &path,
         };
 
     if (versionMajor == 1 || versionMajor == 3) {
-        auto chan = NetworkChannel::make(ioService_, conn);
+        auto chan = ChannelServer::make(ioService_, conn);
         chan->start();
         announce(*chan);
     } else if (versionMajor == 2) {
-        auto a = std::make_shared<Evil2Adapter>(conn, Evil2Adapter::Channel::a);
-        auto chanA = NetworkChannel::make(ioService_, a);
+        auto a = std::make_shared<DualChannelAdapter>(
+            conn, DualChannelAdapter::Subchannel::a);
+        auto chanA = ChannelServer::make(ioService_, a);
         chanA->start();
         announce(*chanA, ":A");
 
-        auto b = std::make_shared<Evil2Adapter>(conn, Evil2Adapter::Channel::b);
-        auto chanB = NetworkChannel::make(ioService_, b);
+        auto b = std::make_shared<DualChannelAdapter>(
+            conn, DualChannelAdapter::Subchannel::b);
+        auto chanB = ChannelServer::make(ioService_, b);
         chanB->start();
         announce(*chanB, ":B");
     } else {

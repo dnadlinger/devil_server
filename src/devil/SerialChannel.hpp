@@ -1,5 +1,5 @@
-#ifndef DEVIL_SERIALCONNECTION_HPP
-#define DEVIL_SERIALCONNECTION_HPP
+#ifndef DEVIL_SERIALCHANNEL_HPP
+#define DEVIL_SERIALCHANNEL_HPP
 
 #include <array>
 #include <chrono>
@@ -10,18 +10,18 @@
 #include "boost/asio/serial_port.hpp"
 #include "boost/asio/spawn.hpp"
 #include "boost/asio/steady_timer.hpp"
-#include "devil/HardwareChannel.hpp"
+#include "devil/Channel.hpp"
 #include "devil/PerformanceCounters.hpp"
 
 namespace devil {
 
-class SerialConnection : public HardwareChannel,
-                         public std::enable_shared_from_this<SerialConnection> {
+class SerialChannel : public Channel,
+                      public std::enable_shared_from_this<SerialChannel> {
 public:
-    static std::shared_ptr<SerialConnection>
+    static std::shared_ptr<SerialChannel>
     make(boost::asio::io_service &ioService, std::string devicePath,
          std::shared_ptr<PerformanceCounters> performanceCounters) {
-        return std::shared_ptr<SerialConnection>(new SerialConnection(
+        return std::shared_ptr<SerialChannel>(new SerialChannel(
             ioService, std::move(devicePath), std::move(performanceCounters)));
     }
 
@@ -52,8 +52,8 @@ public:
                                  StreamPacketCallback cb) override;
 
 private:
-    SerialConnection(boost::asio::io_service &ioService, std::string devicePath,
-                     std::shared_ptr<PerformanceCounters> performanceCounters);
+    SerialChannel(boost::asio::io_service &ioService, std::string devicePath,
+                  std::shared_ptr<PerformanceCounters> performanceCounters);
 
     void realignProtocol(boost::asio::yield_context yc);
 

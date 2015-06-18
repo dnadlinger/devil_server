@@ -1,25 +1,24 @@
-#ifndef DEVIL_NETWORKCHANNEL_HPP
-#define DEVIL_NETWORKCHANNEL_HPP
+#ifndef DEVIL_CHANNELSERVER_HPP
+#define DEVIL_CHANNELSERVER_HPP
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/steady_timer.hpp"
-#include "devil/HardwareChannel.hpp"
+#include "devil/Channel.hpp"
 #include "devil/RpcInterface.hpp"
 #include "devil/ZmqSocket.hpp"
 #include "msgpack.hpp"
 
 namespace devil {
 
-class NetworkChannel : public std::enable_shared_from_this<NetworkChannel> {
+class ChannelServer : public std::enable_shared_from_this<ChannelServer> {
 public:
-    static std::shared_ptr<NetworkChannel>
-    make(boost::asio::io_service &ioService,
-         std::shared_ptr<HardwareChannel> hw) {
-        return std::shared_ptr<NetworkChannel>(
-            new NetworkChannel(ioService, std::move(hw)));
+    static std::shared_ptr<ChannelServer>
+    make(boost::asio::io_service &ioService, std::shared_ptr<Channel> hw) {
+        return std::shared_ptr<ChannelServer>(
+            new ChannelServer(ioService, std::move(hw)));
     }
 
     void start();
@@ -29,8 +28,8 @@ public:
     uint16_t rpcPort() const { return rpcInterface_->port(); }
 
 private:
-    NetworkChannel(boost::asio::io_service &ioService,
-                   std::shared_ptr<HardwareChannel> hw);
+    ChannelServer(boost::asio::io_service &ioService,
+                  std::shared_ptr<Channel> hw);
 
     bool processRpcCommand(const std::string &method, msgpack::object &param);
 
@@ -46,7 +45,7 @@ private:
     void removeStreamSubscription(StreamIdx idx);
 
     boost::asio::io_service &ioService_;
-    std::shared_ptr<HardwareChannel> hw_;
+    std::shared_ptr<Channel> hw_;
 
     std::shared_ptr<RpcInterface> rpcInterface_;
     ZmqSocket notificationSocket_;

@@ -1,5 +1,5 @@
-#ifndef DEVIL_HARDWARECHANNEL_HPP
-#define DEVIL_HARDWARECHANNEL_HPP
+#ifndef DEVIL_CHANNEL_HPP
+#define DEVIL_CHANNEL_HPP
 
 #include <chrono>
 #include <functional>
@@ -77,7 +77,7 @@ struct StreamPacket {
 ///
 /// Implementations are expected not to block execution for a significant
 /// amount of time for any of the methods.
-class HardwareChannel {
+class Channel {
 public:
     /// \brief Signals the implementation to cleanly shut down communication
     /// with the hardware at the next possible point in time.
