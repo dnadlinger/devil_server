@@ -22,6 +22,11 @@ public:
     };
 
     using ChannelNameMap = std::unordered_map<std::string, std::string>;
+    /// \brief Constructs a new instance.
+    ///
+    /// The constructor itself is not public as the chosen strategy to deal with
+    /// memory management in the face of the asynchronous callbacks relies on
+    /// the lifetime being managed by std::shared_ptr.
     static std::shared_ptr<Server> make(boost::asio::io_service &ioService,
                                         Config config) {
         return std::shared_ptr<Server>(

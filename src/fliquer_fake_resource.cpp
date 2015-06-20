@@ -1,3 +1,5 @@
+/// Simple script that fakes a Fliquer resource for protocol development.
+
 #include <iostream>
 #include "boost/asio/io_service.hpp"
 #include "fliquer/fliquer.hpp"

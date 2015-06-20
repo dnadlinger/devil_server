@@ -11,6 +11,8 @@ using namespace std::literals;
 namespace devil {
 
 namespace {
+/// The names of the msgpack-rpc methods for which requests are accepted. See
+/// network-interface.md for details.
 namespace methods {
 const auto ping = "ping"s;
 const auto readRegister = "readRegister"s;
@@ -21,12 +23,15 @@ const auto streamAcquisitionConfig = "streamAcquisitionConfig"s;
 const auto setStreamAcquisitionConfig = "setStreamAcquisitionConfig"s;
 }
 
+/// The names of the msgpack-rpc notifications sent to clients on the general
+/// notification socket.
 namespace notifications {
 const auto registerChanged = "registerChanged"s;
 const auto streamAcquisitionConfigChanged = "streamAcquisitionConfigChanged"s;
 const auto shutdown = "shutdown"s;
 }
 
+/// Enumerates the msgpack extension type tages used in the interface.
 namespace extension_types {
 const auto int8Array = 1;
 }
@@ -68,6 +73,10 @@ void ChannelServer::start() {
     streamingMonitorSockets_.reserve(hw_->streamCount());
     streamingSubscriberCounts_.resize(hw_->streamCount(), 0);
     for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
+        // In theory, we would want to only subscribes to events we care about
+        // instead of ZMQ_EVENT_ALL. However, there do not seem to be any other
+        // events emitted in normal use, and listening to all lets us figure out
+        // if we also need to take others into consideration based on the logs.
         streamingMonitorSockets_.emplace_back(new azmq::socket(
             streamingSockets_[i]->socket.monitor(ioService_, ZMQ_EVENT_ALL)));
     }
@@ -143,7 +152,7 @@ bool ChannelServer::processRpcCommand(const std::string &method,
             return true;
         }
 
-        // What channel we use here does not matter as we always set all to the
+        // Which channel we use here does not matter as we always set all to the
         // same config anyway.
         const auto config = hw_->streamAcquisitionConfig(0);
         rpcInterface_->sendSuccessResponse(
@@ -230,6 +239,7 @@ void ChannelServer::sendStreamPacket(StreamIdx idx,
 }
 
 namespace {
+/// A socket monitor message. Format as per the ZeroMQ API docs.
 #pragma pack(1)
 struct MonitorEvent {
     uint16_t type;
@@ -266,7 +276,7 @@ void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
         socket.receive(msg, ZMQ_DONTWAIT, ec);
 
         if (ec == errc::operation_canceled || ec.value() == EAGAIN) {
-            // We are shutting down or there are no more messages.
+            // We are shutting down, or there are no more messages.
             return;
         }
 
@@ -293,6 +303,10 @@ void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
         } else if (event.type == ZMQ_EVENT_DISCONNECTED) {
             removeStreamSubscription(idx);
         } else {
+            // This might be triggered if the ZeroMQ API is changed in the
+            // future. Have a look at the API docs to see if we need to handle
+            // that event type then. Currently, all the other events should not
+            // be triggered during normal operation of the server.
             BOOST_LOG_TRIVIAL(info)
                 << "Ignoring streaming socket monitor event: type = "
                 << event.type << ", value = " << event.value;
@@ -305,6 +319,9 @@ void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
 void ChannelServer::addStreamSubscription(StreamIdx idx) {
     auto &count = streamingSubscriberCounts_[idx];
     ++count;
+
+    // If this is the first subscriber, register the streaming callback, which
+    // will also cause hardware polling to start.
     if (count == 1) {
         auto self = shared_from_this();
         hw_->setStreamPacketCallback(
@@ -317,6 +334,9 @@ void ChannelServer::addStreamSubscription(StreamIdx idx) {
 void ChannelServer::removeStreamSubscription(StreamIdx idx) {
     auto &count = streamingSubscriberCounts_[idx];
     --count;
+
+    // If this was the last subscriber, remove the streaming callback so that
+    // hardware polling can be stopped.
     if (count == 0) {
         hw_->setStreamPacketCallback(idx, nullptr);
     }

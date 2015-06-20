@@ -12,6 +12,7 @@ using namespace std::literals;
 namespace devil {
 
 namespace {
+/// Hardware parameters and magic numbers.
 namespace hw {
 
 /// The command opcodes from the EVIL protocol (see Verilog decoder source for
@@ -37,6 +38,8 @@ const RegIdx version = 31;
 /// polled actively.
 const std::array<RegIdx, 1> regsToPoll = {{special_regs::systemCondition}};
 
+/// Returns true if the given register is special and thus not accessible from
+/// client code.
 bool isSpecialReg(RegIdx idx) {
     return idx == special_regs::streamInterval ||
            idx == special_regs::streamSampleCount ||
@@ -44,21 +47,37 @@ bool isSpecialReg(RegIdx idx) {
            idx == special_regs::version;
 }
 
+/// The inverse system clock frequency.
 const auto clockInterval = 1s / 96e6;
+
+/// The number of clock cycles between successive stream samples when the
+/// divider register is set to 0.
 const auto minSampleClockDivider = 400;
+
+/// The increase of clock cycles between stream samples per unit increase of the
+/// divider register.
 const auto sampleClockDividerStep = 512;
 
+/// Returns the sample divider register value for a given wall clock sample
+/// interval. It is always rounded up, and will never exceed the hardware
+/// register range.
 RegValue sampleIntervalToReg(std::chrono::duration<double> i) {
     int reg = ceil(((i / clockInterval) - minSampleClockDivider) /
-                   sampleClockDividerStep);
+                    sampleClockDividerStep);
     return std::min(std::max(0, reg), 65535);
 }
 
+/// Converts from a sample register value to a wall clock sample interval. This
+/// conversion is accurate to the precision of the used types resp. the hardware
+/// clock stability.
 std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
     return (r * sampleClockDividerStep + minSampleClockDivider) * clockInterval;
 }
 }
 
+/// The timeout to use when waiting for serial data to arrive (the amount of
+/// time it takes for the hardware samples to be acquired is taken into account
+/// separately).
 const auto readTimeout = 1.0s;
 }
 
@@ -86,7 +105,7 @@ void SerialChannel::start(InitializedCallback initializedCallback) {
         // Wait a bit to give the hardware some time to start up, in case the
         // user just switched it on. The UART just stops working if we are to
         // quick (probably related to the FPGA reconfiguration). This is
-        // particularly noticable when powering the Papilio board from USB for
+        // particularly noticeable when powering the Papilio board from USB for
         // testing, where hot-plugging basically does not work at all without
         // the delay.
 

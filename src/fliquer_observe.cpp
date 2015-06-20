@@ -1,3 +1,6 @@
+/// Simple Fliquer client that logs all resources to the console as they are
+/// discovered.
+
 #include <iostream>
 #include "boost/asio/io_service.hpp"
 #include "fliquer/fliquer.hpp"

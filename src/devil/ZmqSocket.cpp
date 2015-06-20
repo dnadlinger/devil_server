@@ -17,7 +17,7 @@ ZmqSocket::ZmqSocket(io_service &ioService, int type)
 void ZmqSocket::close() {
     socket.cancel();
 
-#if ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR < 2
+#if ZMQ_VERSION_MAJOR < 4 || (ZMQ_VERSION_MAJOR == 4 && ZMQ_VERSION_MINOR < 2)
     const auto endpointString = socket.endpoint();
 #else
     // With ZeroMQ 4.2 from Git master, the actual endpoint address is resolved

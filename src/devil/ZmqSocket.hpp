@@ -7,6 +7,10 @@
 
 namespace devil {
 
+/// \brief Keeps a azmq::socket object together with some metadata and
+/// convenience functions.
+///
+/// Not an abstraction to be proud of.
 struct ZmqSocket {
     ZmqSocket(boost::asio::io_service &ioService, int type);
 

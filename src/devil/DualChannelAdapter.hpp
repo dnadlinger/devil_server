@@ -13,7 +13,7 @@ public:
     ///
     enum class Subchannel {
         a = 0, ///< Channel A ("fast")
-        b = 1 ///< Channel B ("slow")
+        b = 1  ///< Channel B ("slow")
     };
 
     DualChannelAdapter(std::shared_ptr<Channel> hw, Subchannel sub);

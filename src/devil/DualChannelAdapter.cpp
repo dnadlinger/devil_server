@@ -3,14 +3,26 @@
 namespace devil {
 
 namespace {
-const RegIdx channelBRegOffset = 11;
+/// The first regular register of subchannel A.
+const RegIdx aFirstReg = 1;
+/// The last regular register of subchannel A.
+const RegIdx aLastReg = 11;
+/// The offset of the register numbers of subchannel B compared to the related
+/// registers of subchannel A.
+const RegIdx bRegOffset = 11;
 
+// The register indices for the hardware system condition/control registers and
+// the indices using which to expose them in the subchannels.
 const RegIdx fakeSystemControlReg = 0;
 const RegIdx realSystemControlReg = 0;
 const RegIdx fakeSystemConditionReg = 30;
 const RegIdx realSystemConditionReg = 30;
 
+/// Which bits of the system control register belong to subchannel A.
 const RegValue systemControlMask = 0b11111;
+
+/// The amount of bits to shift systemControlMask to get the mask for subchannel
+/// B.
 const unsigned systemControlBShift = 5;
 
 /// Converts a "fake" system control register value to the corrseponding value
@@ -32,8 +44,8 @@ RegValue encodeSystemControlReg(DualChannelAdapter::Subchannel sub,
     return realVal;
 }
 
-/// Extracts the "fake" system control register value for the given channel from
-/// the true hardware register value.
+/// Extracts the "fake" system control register value for the given subchannel
+/// from the true hardware register value.
 RegValue decodeSystemControlReg(DualChannelAdapter::Subchannel channel,
                                 RegValue val) {
     if (channel == DualChannelAdapter::Subchannel::b) {
@@ -42,7 +54,7 @@ RegValue decodeSystemControlReg(DualChannelAdapter::Subchannel channel,
     return val & systemControlMask;
 }
 
-/// Extracts the "fake" system condition register value for the given channel
+/// Extracts the "fake" system condition register value for the given subchannel
 /// from the true hardware register value.
 RegValue decodeSystemConditionReg(DualChannelAdapter::Subchannel channel,
                                   RegValue val) {
@@ -52,7 +64,11 @@ RegValue decodeSystemConditionReg(DualChannelAdapter::Subchannel channel,
     return val & 0b1;
 }
 
-const std::array<std::array<StreamIdx, 4>, 2> streamMap = {
+enum { streamsPerSubchannel = 4 };
+
+/// Maps the user-facing stream indices for each of the subchannels to hardware
+/// stream indices.
+const std::array<std::array<StreamIdx, streamsPerSubchannel>, 2> streamMap = {
     {{{0, 2, 3, 4}}, {{1, 5, 6, 7}}}};
 }
 
@@ -68,7 +84,7 @@ void DualChannelAdapter::addShutdownCallback(ShutdownCallback cb) {
 
 bool DualChannelAdapter::isValidRegister(RegIdx idx) {
     return idx == fakeSystemControlReg || idx == fakeSystemConditionReg ||
-           (1 <= idx && idx <= 11);
+           (aFirstReg <= idx && idx <= aLastReg);
 }
 
 RegValue DualChannelAdapter::readRegister(RegIdx idx) {
@@ -83,7 +99,7 @@ RegValue DualChannelAdapter::readRegister(RegIdx idx) {
     }
 
     if (sub_ == Subchannel::b) {
-        idx += channelBRegOffset;
+        idx += bRegOffset;
     }
     return hw_->readRegister(idx);
 }
@@ -100,7 +116,7 @@ bool DualChannelAdapter::modifyRegister(RegIdx idx, RegValue oldVal,
     }
 
     if (sub_ == Subchannel::b) {
-        idx += channelBRegOffset;
+        idx += bRegOffset;
     }
     return hw_->modifyRegister(idx, oldVal, newVal);
 }
@@ -117,15 +133,17 @@ void DualChannelAdapter::addRegisterChangeCallback(RegisterChangeCallback cb) {
             return;
         }
 
-        if (c == Subchannel::a && idx <= channelBRegOffset) {
+        // Not a special register; only forward if the register actually belongs
+        // to our subchannel.
+        if (c == Subchannel::a && idx <= bRegOffset) {
             cb(idx, val);
-        } else if (c == Subchannel::b && idx > channelBRegOffset) {
-            cb(idx - channelBRegOffset, val);
+        } else if (c == Subchannel::b && idx > bRegOffset) {
+            cb(idx - bRegOffset, val);
         }
     });
 }
 
-StreamIdx DualChannelAdapter::streamCount() { return 4; }
+StreamIdx DualChannelAdapter::streamCount() { return streamsPerSubchannel; }
 
 StreamAcquisitionConfig
 DualChannelAdapter::streamAcquisitionConfig(StreamIdx idx) {

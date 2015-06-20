@@ -1,3 +1,9 @@
+/// The main DEVIL server executable.
+///
+/// Tries to load a "devild.json" file in the current working directory and
+/// spins up a devil::Server instance configured according to it. Shutdown
+/// signals are intercepted to properly close hardware connections and announce
+/// the shutdown to network clients.
 
 #include <iostream>
 #include <string>
@@ -60,6 +66,11 @@ int main() {
     auto server = devil::Server::make(io, config);
     server->start();
 
+    // Note: Because we intercept SIGINT here, kill and Ctrl-C might not be
+    // enough to terminate the program if you introduced a bug in the cleanup
+    // logic (io.run() will only return once there are no more active async
+    // operations). You can e.g. use Ctrl-Z followed by kill -9 to still
+    // terminate the process during development.
     signal_set shutdownSignals{io};
     shutdownSignals.add(SIGINT);
     shutdownSignals.add(SIGTERM);
