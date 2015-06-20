@@ -54,7 +54,7 @@ int main() {
             try {
                 s->second.send(buffer(requestBuf.data(), requestBuf.size()));
                 s->second.receive(response);
-            } catch (system_error &err) {
+            } catch (boost::system::system_error &err) {
                 if (err.code().value() != EAGAIN) throw err;
                 toRemove.push_back(s.get());
                 continue;
@@ -87,7 +87,8 @@ int main() {
         }
 
         timer.expires_from_now(1s);
-        timer.async_wait([&](const error_code &) { displayStats(); });
+        timer.async_wait(
+            [&](const boost::system::error_code &) { displayStats(); });
     };
     displayStats();
 

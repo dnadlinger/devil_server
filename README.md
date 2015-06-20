@@ -8,7 +8,9 @@ Raspberry Pi) connected via USB to the EVIL boxes to offer
 an Ethernet interface to them.
 
 This project is written in "modern" C++ and will require a
-compiler that supports C++14 to build.
+compiler that supports C++14 to build. Clang 3.6 and
+GCC 5.1.0 are known to work, GCC 4.9 is known to contain
+bugs that cause compilation to fail.
 
 Originally written by David Nadlinger [0] for hardware
 developed by Ludwig de Clerq [1] and Vlad Negnevitsky [2]
