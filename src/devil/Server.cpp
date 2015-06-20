@@ -123,6 +123,8 @@ void Server::registerDevice(const std::string &path,
             v.minor = versionMinor;
             r.version = v;
 
+            // See if the user has configured a name string for this device.
+            // Otherwise, just reuse the serial string as the display name.
             const auto nameIt = config_.channelNames.find(fullSerial);
             if (nameIt == config_.channelNames.end()) {
                 r.displayName = fullSerial;
