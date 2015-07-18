@@ -70,9 +70,8 @@ void Node::addLocalResource(const Resource &resource) {
                              [this, self, buf](const error_code &err, size_t) {
                                  if (err) {
                                      if (err == errc::bad_file_descriptor) {
-                                         // The socket has been closed by
-                                         // stop(), exit the callback
-                                         // chain.
+                                         // The socket has been closed e.g. by
+                                         // stop().
                                          return;
                                      }
                                      BOOST_LOG(log_)
@@ -106,8 +105,7 @@ void Node::broadcastEnumerationRequest() {
         [this, self, requestBuf](const error_code &err, size_t) {
             if (err) {
                 if (err == errc::bad_file_descriptor) {
-                    // The socket has been closed by stop(), exit the callback
-                    // chain.
+                    // The socket has been closed e.g. by stop().
                     return;
                 }
                 BOOST_LOG(log_) << "Failed to send broadcast: " << err.message()
@@ -179,8 +177,7 @@ void Node::actOnUdpPacket(size_t sizeBytes) {
         BOOST_LOG(log_) << "Malformed UDP packet received: " << e.what();
     } catch (std::bad_cast &e) {
         // msgpack throws bad_cast when we receive a valid msgpack object
-        // but
-        // try to get() it as an mismatched type.
+        // but try to get() it as an mismatched type.
         BOOST_LOG(log_) << "Malformed UDP packet received: " << e.what();
     }
 }
@@ -200,9 +197,8 @@ void Node::replyWithLocalResources() {
                              [this, self, buf](const error_code &err, size_t) {
                                  if (err) {
                                      if (err == errc::bad_file_descriptor) {
-                                         // The socket has been closed by
-                                         // stop(), exit the callback
-                                         // chain.
+                                         // The socket has been closed e.g. by
+                                         // stop().
                                          return;
                                      }
                                      BOOST_LOG(log_)
