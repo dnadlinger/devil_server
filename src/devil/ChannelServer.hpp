@@ -72,12 +72,10 @@ private:
     /// socket.
     void sendStreamPacket(StreamIdx idx, const StreamPacket &packet);
 
-    /// Asynchronously waits for the next timeout on the streaming monitor timer
-    /// and handles any accumulated events.
-    void nextStreamingMonitorTimer();
-
-    /// Processes any waiting events on the given streaming monitor socket.
-    void processMonitorEvents(StreamIdx idx, azmq::socket &socket);
+    /// Asynchronously waits for the next event on the monitor socket for the
+    /// given stream and handles it; continuing asynchronously until the socket
+    /// is closed.
+    void nextMonitorEvent(StreamIdx idx, azmq::socket &socket);
 
     /// Keeps track of a new subscriber for the given stream and registers the
     /// hardware callback if necessary.
@@ -105,11 +103,6 @@ private:
 
     /// inproc PAIR sockets for listening for ZeroMQ monitor events.
     std::vector<std::unique_ptr<azmq::socket>> streamingMonitorSockets_;
-
-    /// Timeout for regularly checking for new monitor events on the streaming
-    /// sockets, as we cannot use async_read et al. without hogging 100% CPU
-    /// (due to the transport being inproc as opposed to an actual socket pair).
-    boost::asio::steady_timer streamingMonitorTimer_;
 
     /// The number of connected subscribers for each streaming channel.
     std::vector<size_t> streamingSubscriberCounts_;

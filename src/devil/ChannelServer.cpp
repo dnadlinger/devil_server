@@ -39,8 +39,7 @@ const auto int8Array = 1;
 
 ChannelServer::ChannelServer(io_service &ioService, std::shared_ptr<Channel> hw)
     : ioService_{ioService}, hw_{std::move(hw)},
-      notificationSocket_{ioService, ZMQ_PUB},
-      streamingMonitorTimer_{ioService} {
+      notificationSocket_{ioService, ZMQ_PUB} {
     for (unsigned i = 0; i < hw_->streamCount(); ++i) {
         streamingSockets_.emplace_back(new ZmqSocket(ioService, ZMQ_PUB));
     }
@@ -63,7 +62,6 @@ void ChannelServer::start() {
         for (auto &s : streamingSockets_) {
             s->socket.close_monitor();
         }
-        streamingMonitorTimer_.cancel();
     });
 
     hw_->addRegisterChangeCallback([this, self](RegIdx idx, RegValue val) {
@@ -79,9 +77,8 @@ void ChannelServer::start() {
         // if we also need to take others into consideration based on the logs.
         streamingMonitorSockets_.emplace_back(new azmq::socket(
             streamingSockets_[i]->socket.monitor(ioService_, ZMQ_EVENT_ALL)));
+        nextMonitorEvent(i, *streamingMonitorSockets_.back());
     }
-
-    nextStreamingMonitorTimer();
 
     rpcInterface_->start();
 }
@@ -248,43 +245,20 @@ struct MonitorEvent {
 #pragma options align = reset
 }
 
-void ChannelServer::nextStreamingMonitorTimer() {
-    // We manually check for new monitor events a timer instead of using
-    // async_receive because the latter relies on continuously polling, which
-    // leads to 100% CPU utilization (as the socket uses the inproc transport).
-    streamingMonitorTimer_.expires_from_now(100ms);
-
+void ChannelServer::nextMonitorEvent(StreamIdx idx, azmq::socket &socket) {
     auto self = shared_from_this();
-    streamingMonitorTimer_.async_wait([this, self](const error_code &ec) {
+    socket.async_receive([this, self, idx, &socket](
+        const error_code &ec, azmq::message &msg, size_t) {
         if (ec == errc::operation_canceled) {
             // We are shutting down.
-            return;
-        }
-
-        for (StreamIdx idx = 0; idx < streamingMonitorSockets_.size(); ++idx) {
-            processMonitorEvents(idx, *streamingMonitorSockets_[idx]);
-        }
-
-        nextStreamingMonitorTimer();
-    });
-}
-
-void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
-    while (true) {
-        azmq::message msg;
-        error_code ec;
-        socket.receive(msg, ZMQ_DONTWAIT, ec);
-
-        if (ec == errc::operation_canceled || ec.value() == EAGAIN) {
-            // We are shutting down, or there are no more messages.
             return;
         }
 
         if (ec) {
             BOOST_LOG_TRIVIAL(error) << "Error receiving streaming monitor "
                                         "event; should not happen unless there "
-                                        "is a ZeroMQ-internal problem: " << ec
-                                     << " ('" << ec.message() << "')";
+                                        "is a ZeroMQ-internal problem?";
+            nextMonitorEvent(idx, socket);
             return;
         }
 
@@ -292,7 +266,8 @@ void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
             BOOST_LOG_TRIVIAL(error) << "Streaming monitor event only consists "
                                         "of one part; should not happen unless "
                                         "there is a ZeroMQ-internal problem?";
-            continue;
+            nextMonitorEvent(idx, socket);
+            return;
         }
 
         MonitorEvent event;
@@ -313,7 +288,8 @@ void ChannelServer::processMonitorEvents(StreamIdx idx, azmq::socket &socket) {
         }
 
         socket.flush();
-    }
+        nextMonitorEvent(idx, socket);
+    });
 }
 
 void ChannelServer::addStreamSubscription(StreamIdx idx) {
