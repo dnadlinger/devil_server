@@ -11,8 +11,10 @@ endif()
 # different one, go ahead and change this, but be sure to thoroughly test the
 # software afterwards.
 find_package(Boost 1.57.0 REQUIRED coroutine filesystem log regex system)
+include_directories(${Boost_INCLUDE_DIRS})
 
 find_package(ZeroMQ 4.0 REQUIRED)
+include_directories(${ZeroMQ_INCLUDE_DIRS})
 
 # Boost.Asio fails to recognize std::array and std::chrono as working with
 # GCC 4.9, yet it seems to work fine for our purposes.
