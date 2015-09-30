@@ -82,6 +82,7 @@ public:
     using curve_server = opt::boolean<ZMQ_CURVE_SERVER>;
     using curve_publickey = opt::binary<ZMQ_CURVE_PUBLICKEY>;
     using curve_privatekey = opt::binary<ZMQ_CURVE_SECRETKEY>;
+    using curve_serverkey = opt::binary<ZMQ_CURVE_SERVERKEY>;
     using zap_domain = opt::binary<ZMQ_ZAP_DOMAIN>;
     using conflate = opt::boolean<ZMQ_CONFLATE>;
 
@@ -503,7 +504,7 @@ public:
     template<typename MutableBufferSequence,
              typename ReadHandler>
     void async_receive(MutableBufferSequence const& buffers,
-                       ReadHandler handler,
+                       ReadHandler && handler,
                        flags_type flags = 0) {
         using type = detail::receive_buffer_op<MutableBufferSequence, ReadHandler>;
         get_service().enqueue<type>(implementation, detail::socket_service::op_type::read_op,
@@ -532,7 +533,7 @@ public:
     template<typename MutableBufferSequence,
              typename ReadMoreHandler>
     void async_receive_more(MutableBufferSequence const& buffers,
-                            ReadMoreHandler handler,
+                            ReadMoreHandler && handler,
                             flags_type flags = 0) {
         using type = detail::receive_more_buffer_op<MutableBufferSequence, ReadMoreHandler>;
         get_service().enqueue<type>(implementation, detail::socket_service::op_type::read_op,
@@ -558,7 +559,7 @@ public:
      *  the message.
      */
     template<typename MessageReadHandler>
-    void async_receive(MessageReadHandler handler,
+    void async_receive(MessageReadHandler && handler,
                        flags_type flags = 0) {
         using type = detail::receive_op<MessageReadHandler>;
         get_service().enqueue<type>(implementation, detail::socket_service::op_type::read_op,
@@ -578,7 +579,7 @@ public:
     template<typename ConstBufferSequence,
              typename WriteHandler>
     void async_send(ConstBufferSequence const& buffers,
-                    WriteHandler handler,
+                    WriteHandler && handler,
                     flags_type flags = 0) {
         using type = detail::send_buffer_op<ConstBufferSequence, WriteHandler>;
         get_service().enqueue<type>(implementation, detail::socket_service::op_type::write_op,
@@ -586,14 +587,14 @@ public:
     }
 
     /** \brief Initate an async send operation
-     *  \tparam WriteHandler must conform to the asio ReadHandler concept
+     *  \tparam WriteHandler must conform to the asio WriteHandler concept
      *  \param msg message reference
-     *  \param handler ReadHandler
+     *  \param handler WriteHandler
      *  \param flags int flags
      */
     template<typename WriteHandler>
     void async_send(message const& msg,
-                    WriteHandler handler,
+                    WriteHandler && handler,
                     flags_type flags = 0) {
         using type = detail::send_op<WriteHandler>;
         get_service().enqueue<type>(implementation, detail::socket_service::op_type::write_op,
@@ -620,10 +621,21 @@ public:
     }
 
     /** \brief Cancel all outstanding asynchronous operations
+     *  \param ec set to indicate what, if any, error occurred
+     */
+    boost::system::error_code cancel(boost::system::error_code & ec) {
+        return get_service().cancel(implementation, ec);
+    }
+
+    /** \brief Cancel all outstanding asynchronous operations
+     *  \throw boost::system::system_error
      */
     void cancel() {
-        get_service().cancel(implementation);
+        boost::system::error_code ec;
+        if (get_service().cancel(implementation, ec))
+            throw boost::system::system_error(ec);
     }
+
     /** \brief Allows access to the underlying ZeroMQ socket
      *  \remark With great power, comes great responsibility
      */
@@ -632,7 +644,6 @@ public:
     }
 
     /** \brief monitor events on a socket
-        *  \tparam Handler handler function which conforms to the SocketMonitorHandler concept
         *  \param ios io_service on which to bind the returned monitor socket
         *  \param events int mask of events to publish to returned socket
         *  \param ec error_code to set on error
@@ -652,10 +663,8 @@ public:
     }
 
     /** \brief monitor events on a socket
-        *  \tparam Handler handler function which conforms to the SocketMonitorHandler concept
         *  \param ios io_service on which to bind the returned monitor socket
         *  \param events int mask of events to publish to returned socket
-        *  \param ec error_code to set on error
         *  \returns socket
     **/
     socket monitor(boost::asio::io_service & ios,

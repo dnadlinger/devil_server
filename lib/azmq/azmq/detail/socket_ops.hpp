@@ -47,7 +47,7 @@ namespace detail {
             void operator()(void* socket) {
                 int v = 0;
                 auto rc = zmq_setsockopt(socket, ZMQ_LINGER, &v, sizeof(int));
-                BOOST_ASSERT_MSG(rc == 0, "set linger=0 on shutdown");
+                BOOST_ASSERT_MSG(rc == 0, "set linger=0 on shutdown"); (void)rc;
                 zmq_close(socket);
             }
         };
@@ -111,6 +111,12 @@ namespace detail {
 #endif
             }
             return res;
+        }
+
+        static boost::system::error_code cancel_stream_descriptor(stream_descriptor & sd,
+                                                                  boost::system::error_code & ec) {
+            BOOST_ASSERT_MSG(sd, "invalid stream_descriptor");
+            return sd->cancel(ec);
         }
 
         static boost::system::error_code bind(socket_type & socket,
@@ -214,8 +220,10 @@ namespace detail {
             int evs = 0;
             size_t size = sizeof(evs);
             auto rc = zmq_getsockopt(socket.get(), ZMQ_EVENTS, &evs, &size);
-            if (rc < 0)
+            if (rc < 0) {
                 ec = make_error_code();
+                return 0;
+            }
             return evs;
         }
 
@@ -344,6 +352,7 @@ namespace detail {
                 auto sz = receive(msg, socket, ZMQ_RCVMORE, ec);
                 if (ec)
                     return 0;
+                res += sz;
             };
             return res;
         }

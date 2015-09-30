@@ -21,9 +21,12 @@
 
 #include <zmq.h>
 
+#include <type_traits>
+#include <memory>
 #include <vector>
 #include <ostream>
 #include <cstring>
+
 
 namespace azmq {
 namespace detail {
@@ -31,12 +34,24 @@ namespace detail {
 }
 
 AZMQ_V1_INLINE_NAMESPACE_BEGIN
+
+    struct nocopy_t {};
+
+#ifdef BOOST_NO_CXX11_CONSTEXPR
+    const nocopy_t nocopy = nocopy_t{};
+#else
+    constexpr nocopy_t nocopy = nocopy_t{};
+#endif
+
+
     struct message {
+        typedef void (free_fn) (void *data);
+
         using flags_type = int;
 
         message() BOOST_NOEXCEPT_OR_NOTHROW {
             auto rc = zmq_msg_init(&msg_);
-            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero");
+            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero"); (void)rc;
         }
 
         explicit message(size_t size) {
@@ -54,13 +69,63 @@ AZMQ_V1_INLINE_NAMESPACE_BEGIN
                                      buffer);
         }
 
-        message(boost::asio::mutable_buffer const& buffer) {
-            auto sz = boost::asio::buffer_size(buffer);
-            auto rc = zmq_msg_init_size(&msg_, sz);
+        message(nocopy_t, boost::asio::const_buffer const& buffer)
+            : message(nocopy,
+                boost::asio::mutable_buffer(
+                    (void *)boost::asio::buffer_cast<const void*>(buffer),
+                    boost::asio::buffer_size(buffer)),
+                nullptr,
+                nullptr)
+        {}
+
+        message(nocopy_t, boost::asio::mutable_buffer const& buffer, void* hint, zmq_free_fn* deleter)
+        {
+            auto rc = zmq_msg_init_data(&msg_,
+                                        boost::asio::buffer_cast<void*>(buffer),
+                                        boost::asio::buffer_size(buffer),
+                                        deleter, hint);
             if (rc)
                 throw boost::system::system_error(make_error_code());
-            boost::asio::buffer_copy(boost::asio::buffer(zmq_msg_data(&msg_), sz),
-                                     buffer);
+        }
+
+        template<class Deleter, class Enabler =
+            typename std::enable_if<!std::is_convertible<Deleter, free_fn *>::value>::type
+        >
+        message(nocopy_t, boost::asio::mutable_buffer const& buffer, Deleter&& deleter)
+        {
+            using D = typename std::decay<Deleter>::type;
+
+            const auto call_deleter = [](void *buf, void *hint) {
+                std::unique_ptr<D> deleter(reinterpret_cast<D*>(hint));
+                BOOST_ASSERT_MSG(deleter, "!deleter");
+                (*deleter)(buf);
+            };
+
+            std::unique_ptr<D> d(new D(std::forward<Deleter>(deleter)));
+            auto rc = zmq_msg_init_data(&msg_,
+                                        boost::asio::buffer_cast<void*>(buffer),
+                                        boost::asio::buffer_size(buffer),
+                                        call_deleter, d.get());
+            if (rc)
+                throw boost::system::system_error(make_error_code());
+            d.release();
+        }
+
+        message(nocopy_t, boost::asio::mutable_buffer const& buffer, free_fn* deleter)
+        {
+            BOOST_ASSERT_MSG(deleter, "!deleter");
+
+            const auto call_deleter = [](void *buf, void *hint) {
+                free_fn *deleter(reinterpret_cast<free_fn*>(hint));
+                (*deleter)(buf);
+            };
+
+            auto rc = zmq_msg_init_data(&msg_,
+                                        boost::asio::buffer_cast<void*>(buffer),
+                                        boost::asio::buffer_size(buffer),
+                                        call_deleter, reinterpret_cast<void *>(deleter));
+            if (rc)
+                throw boost::system::system_error(make_error_code());
         }
 
         explicit message(std::string const& str)
@@ -71,13 +136,13 @@ AZMQ_V1_INLINE_NAMESPACE_BEGIN
             : msg_(rhs.msg_)
         {
             auto rc = zmq_msg_init(&rhs.msg_);
-            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero");
+            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero"); (void)rc;
         }
 
         message& operator=(message && rhs) BOOST_NOEXCEPT_OR_NOTHROW {
             msg_ = rhs.msg_;
             auto rc = zmq_msg_init(&rhs.msg_);
-            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero");
+            BOOST_ASSERT_MSG(rc == 0, "zmq_msg_init return non-zero"); (void)rc;
 
             return *this;
         }
@@ -104,6 +169,10 @@ AZMQ_V1_INLINE_NAMESPACE_BEGIN
         boost::asio::const_buffer cbuffer() const {
             auto pv = zmq_msg_data(const_cast<zmq_msg_t*>(&msg_));
             return boost::asio::buffer(pv, size());
+        }
+
+        operator boost::asio::const_buffer() const {
+            return cbuffer();
         }
 
         boost::asio::const_buffer buffer() const {
@@ -182,6 +251,13 @@ AZMQ_V1_INLINE_NAMESPACE_BEGIN
     private:
         friend detail::socket_ops;
         zmq_msg_t msg_;
+
+        /*template<class Deleter>
+        static void call_deleter(void *pv, void* hint) {
+            std::unique_ptr<Deleter> deleter(reinterpret_cast<Deleter*>(hint));
+            BOOST_ASSERT_MSG(deleter, "!deleter");
+            (*deleter)(pv);
+        }*/
 
         void close() {
             auto rc = zmq_msg_close(&msg_);

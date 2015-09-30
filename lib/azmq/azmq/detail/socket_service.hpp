@@ -12,6 +12,9 @@
 #include "../message.hpp"
 #include "../option.hpp"
 #include "../util/scope_guard.hpp"
+#include "config/mutex.hpp"
+#include "config/lock_guard.hpp"
+
 #include "basic_io_object.hpp"
 #include "service_base.hpp"
 #include "context_ops.hpp"
@@ -76,6 +79,7 @@ namespace detail {
             mutable boost::mutex mutex_;
             bool in_speculative_completion_ = false;
             bool scheduled_ = false;
+            bool missed_events_found_ = false;
             bool allow_speculative_ = true;
             shutdown_type shutdown_ = shutdown_type::none;
             exts_type exts_;
@@ -98,26 +102,38 @@ namespace detail {
                 optimize_single_threaded_ = optimize_single_threaded;
             }
 
-            bool perform_ops(int evs, op_queue_type & ops) {
-                bool res  = false;
-                int filter[max_ops] = { ZMQ_POLLIN, ZMQ_POLLOUT };
-                for (auto i = 0; i < max_ops; ++i) {
-                    if ((evs & filter[i]) && !op_queue_[i].empty()) {
-                        if (op_queue_[i].front().do_perform(socket_)) {
+            int events_mask() const
+            {
+                static_assert(2 == max_ops, "2 == max_ops");
+                return (!op_queue_[read_op].empty() ? ZMQ_POLLIN : 0)
+                     | (!op_queue_[write_op].empty() ? ZMQ_POLLOUT : 0);
+            }
+
+            bool perform_ops(op_queue_type & ops, boost::system::error_code& ec) {
+                while (int evs = socket_ops::get_events(socket_, ec) & events_mask()) {
+                    static_assert(2 == max_ops, "2 == max_ops");
+                    const int filter[max_ops] = { ZMQ_POLLIN, ZMQ_POLLOUT };
+
+                    for (size_t i = 0; i != max_ops; ++i) {
+                        if ((evs & filter[i]) && op_queue_[i].front().do_perform(socket_)) {
                             op_queue_[i].pop_front_and_dispose([&ops](reactor_op * op) {
                                 ops.push_back(*op);
                             });
                         }
                     }
-                    res |= !op_queue_[i].empty();
                 }
-                return res;
+
+                return 0 != events_mask(); // true if more operations scheduled
+            }
+
+            boost::system::error_code cancel_stream_descriptor(boost::system::error_code & ec) {
+                return socket_ops::cancel_stream_descriptor(sd_, ec);
             }
 
             void cancel_ops(boost::system::error_code const& ec, op_queue_type & ops) {
-                for (auto i = 0; i < max_ops; ++i) {
+                for (size_t i = 0; i != max_ops; ++i) {
                     while (!op_queue_[i].empty()) {
-                        op_queue_[i].front().ec_ = make_error_code(boost::system::errc::operation_canceled);
+                        op_queue_[i].front().ec_ = ec;
                         op_queue_[i].pop_front_and_dispose([&ops](reactor_op * op) {
                             ops.push_back(*op);
                         });
@@ -372,9 +388,11 @@ namespace detail {
                     flags_type flags,
                     boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::write_op, ec))
-                return socket_ops::send(buffers, impl->socket_, flags, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::write_op, ec))
+                return 0;
+            auto r = socket_ops::send(buffers, impl->socket_, flags, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         size_t send(implementation_type & impl,
@@ -382,9 +400,11 @@ namespace detail {
                     flags_type flags,
                     boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::write_op, ec))
-                return socket_ops::send(msg, impl->socket_, flags, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::write_op, ec))
+                return 0;
+            auto r = socket_ops::send(msg, impl->socket_, flags, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         template<typename MutableBufferSequence>
@@ -393,9 +413,11 @@ namespace detail {
                        flags_type flags,
                        boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::read_op, ec))
-                return socket_ops::receive(buffers, impl->socket_, flags, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::read_op, ec))
+                return 0;
+            auto r = socket_ops::receive(buffers, impl->socket_, flags, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         size_t receive(implementation_type & impl,
@@ -403,9 +425,11 @@ namespace detail {
                        flags_type flags,
                        boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::read_op, ec))
-                return socket_ops::receive(msg, impl->socket_, flags, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::read_op, ec))
+                return 0;
+            auto r = socket_ops::receive(msg, impl->socket_, flags, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         size_t receive_more(implementation_type & impl,
@@ -413,17 +437,21 @@ namespace detail {
                             flags_type flags,
                             boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::read_op, ec))
-                return socket_ops::receive_more(vec, impl->socket_, flags, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::read_op, ec))
+                return 0;
+            auto r = socket_ops::receive_more(vec, impl->socket_, flags, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         size_t flush(implementation_type & impl,
                      boost::system::error_code & ec) {
             unique_lock l{ *impl };
-            if (!is_shutdown(impl, op_type::read_op, ec))
-                return socket_ops::flush(impl->socket_, ec);
-            return 0;
+            if (is_shutdown(impl, op_type::read_op, ec))
+                return 0;
+            auto r = socket_ops::flush(impl->socket_, ec);
+            check_missed_events(impl);
+            return r;
         }
 
         using reactor_op_ptr = std::unique_ptr<reactor_op>;
@@ -438,10 +466,12 @@ namespace detail {
             }
         }
 
-        void cancel(implementation_type & impl) {
+        boost::system::error_code cancel(implementation_type & impl,
+                                         boost::system::error_code & ec) {
             unique_lock l{ *impl };
             descriptors_.unregister_descriptor(impl);
             cancel_ops(impl);
+            return impl->cancel_stream_descriptor(ec);
         }
 
         std::string monitor(implementation_type & impl, int events,
@@ -479,18 +509,53 @@ namespace detail {
         static void cancel_ops(implementation_type & impl) {
             op_queue_type ops;
             impl->cancel_ops(reactor_op::canceled(), ops);
-
             while (!ops.empty())
                 ops.pop_front_and_dispose(reactor_op::do_complete);
         }
 
         using weak_descriptor_ptr = std::weak_ptr<per_descriptor_data>;
+
+        static void handle_missed_events(weak_descriptor_ptr const& weak_impl, boost::system::error_code ec) {
+            auto impl = weak_impl.lock();
+            if (!impl)
+                return;
+
+            op_queue_type ops;
+            {
+                unique_lock l{ *impl };
+
+                impl->missed_events_found_ = false;
+
+                if (!ec)
+                    impl->perform_ops(ops, ec);
+                if (ec)
+                    impl->cancel_ops(ec, ops);
+            }
+            while (!ops.empty())
+                ops.pop_front_and_dispose(reactor_op::do_complete);
+        }
+
+        void check_missed_events(implementation_type & impl)
+        {
+            if (!impl->scheduled_ || impl->missed_events_found_)
+                return;
+
+            boost::system::error_code ec;
+            auto evs = socket_ops::get_events(impl->socket_, ec) & impl->events_mask();
+
+            if (evs || ec)
+            {
+                impl->missed_events_found_ = true;
+                weak_descriptor_ptr weak_impl(impl);
+                impl->sd_->get_io_service().post([weak_impl, ec]() { handle_missed_events(weak_impl, ec); });
+            }
+        }
+
         struct descriptor_map {
             ~descriptor_map() {
                 lock_type l{ mutex_ };
                 for(auto&& descriptor : map_)
                     if (auto impl = descriptor.second.lock()) {
-                        auto handle = impl->sd_->native_handle();
                         cancel_ops(impl);
                     }
             }
@@ -519,29 +584,29 @@ namespace detail {
             weak_descriptor_ptr per_descriptor_data_;
 
             reactor_handler(descriptor_map & descriptors,
-                            implementation_type per_descriptor_data)
+                            implementation_type const& per_descriptor_data)
                 : descriptors_(descriptors)
                 , per_descriptor_data_(per_descriptor_data)
             { }
 
-            void operator()(boost::system::error_code const& e, size_t) const {
-                boost::system::error_code ec{ e };
+            void operator()(boost::system::error_code ec, size_t) const {
+                auto p = per_descriptor_data_.lock();
+                if (!p)
+                    return;
+
                 op_queue_type ops;
-                if(auto p = per_descriptor_data_.lock()) {
+                {
                     unique_lock l{ *p };
-                    p->scheduled_ = false;
-                    int evs = 0;
 
                     if (!ec)
-                        evs = socket_ops::get_events(p->socket_, ec);
-
-                    if (!ec)
-                        p->scheduled_ = p->perform_ops(evs, ops);
-                    else
+                        p->scheduled_ = p->perform_ops(ops, ec);
+                    if (ec) {
+                        p->scheduled_ = false;
                         p->cancel_ops(ec, ops);
+                    }
 
                     if (p->scheduled_)
-                        schedule(descriptors_, p, true);
+                        p->sd_->async_read_some(boost::asio::null_buffers(), *this);
                     else
                         descriptors_.unregister_descriptor(p);
                 }
@@ -549,13 +614,13 @@ namespace detail {
                     ops.pop_front_and_dispose(reactor_op::do_complete);
             }
 
-            static void schedule(descriptor_map & descriptors, implementation_type & impl, bool reschedule = false) {
+            static void schedule(descriptor_map & descriptors, implementation_type & impl) {
                 reactor_handler handler(descriptors, impl);
-                if (!reschedule)
-                    descriptors.register_descriptor(impl);
-                int evs = 0;
+                descriptors.register_descriptor(impl);
+
                 boost::system::error_code ec;
-                evs = socket_ops::get_events(impl->socket_, ec);
+                auto evs = socket_ops::get_events(impl->socket_, ec) & impl->events_mask();
+
                 if (evs || ec) {
                     impl->sd_->get_io_service().post([handler, ec] { handler(ec, 0); });
                 } else {
@@ -566,10 +631,10 @@ namespace detail {
         };
 
         struct deferred_completion {
-            std::weak_ptr<per_descriptor_data> owner_;
+            weak_descriptor_ptr owner_;
             reactor_op *op_;
 
-            deferred_completion(implementation_type owner,
+            deferred_completion(implementation_type const& owner,
                                 reactor_op_ptr op)
                 : owner_(owner)
                 , op_(op.release())
@@ -612,8 +677,9 @@ namespace detail {
 
             if (!impl->scheduled_) {
                 impl->scheduled_ = true;
-                l.unlock();
                 reactor_handler::schedule(descriptors_, impl);
+            } else {
+                check_missed_events(impl);
             }
             return ec;
         }
