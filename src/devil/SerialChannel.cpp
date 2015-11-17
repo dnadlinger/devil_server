@@ -61,10 +61,19 @@ const auto sampleClockDividerStep = 512;
 /// Returns the sample divider register value for a given wall clock sample
 /// interval. It is always rounded up, and will never exceed the hardware
 /// register range.
-RegValue sampleIntervalToReg(std::chrono::duration<double> i) {
-    int reg = ceil(((i / clockInterval) - minSampleClockDivider) /
-                   sampleClockDividerStep);
-    return std::min(std::max(0, reg), 65535);
+///
+/// At about 800 samples, an interval register value of 0 seems to overflow some
+/// hardware buffer when using a Papilio One board connected to a Raspberry Pi 2
+/// (Arch Linux, Kernel 4.1.13). As a workaround, we require at least a value
+/// of 1 there. This should be fixed by increasing the base divider in the
+/// bitstream.
+RegValue sampleIntervalToReg(std::chrono::duration<double> timeSpan,
+                             unsigned sampleCount) {
+    const RegValue reg = ceil(
+        ((timeSpan / sampleCount / clockInterval) - minSampleClockDivider) /
+        sampleClockDividerStep);
+    const RegValue minReg = (sampleCount > 512) ? 1 : 0;
+    return std::min(std::max(minReg, reg), RegValue(65535));
 }
 
 /// Converts from a sample register value to a wall clock sample interval. This
@@ -349,7 +358,7 @@ std::pair<bool, StreamPacket> SerialChannel::readStreamPacket(
 
     auto &intervalCache = registerCache_[hw::special_regs::streamInterval];
     const auto intervalReg =
-        hw::sampleIntervalToReg(config.timeSpan / config.sampleCount);
+        hw::sampleIntervalToReg(config.timeSpan, config.sampleCount);
     if (intervalCache != intervalReg) {
         intervalCache = intervalReg;
         writeRegister(hw::special_regs::streamInterval, intervalCache, yc);
