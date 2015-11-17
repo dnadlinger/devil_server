@@ -31,7 +31,7 @@ const std::vector<std::pair<const char *, std::string>> properties = {
 /// \brief Monitors system hot-plug events for the (dis-)connection of a given
 /// type of peripheral.
 ///
-/// This is done in a way
+/// This is done in a way that avoids periodic polling.
 ///
 /// The current implementation only supports Linux; more specifically any recent
 /// distribution that uses udev.

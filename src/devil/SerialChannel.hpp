@@ -15,9 +15,11 @@
 
 namespace devil {
 
-/// \brief Serial connection to a hardware controller.
+/// \brief Serial connection to a hardware controller that speaks the EVIL
+/// protocol.
 ///
-///
+/// For newer hardware, a single SerialChannel might consist of multiple logical
+/// channels.
 class SerialChannel : public Channel,
                       public std::enable_shared_from_this<SerialChannel> {
 public:
