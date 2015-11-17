@@ -58,8 +58,8 @@ int main() {
     try {
         config = readConfig();
     } catch (std::runtime_error &err) {
-        BOOST_LOG_TRIVIAL(fatal)
-            << "Malformed configuration file: " << err.what();
+        BOOST_LOG_TRIVIAL(fatal) << "Malformed configuration file: "
+                                 << err.what();
         return 1;
     }
 

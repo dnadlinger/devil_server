@@ -63,7 +63,7 @@ const auto sampleClockDividerStep = 512;
 /// register range.
 RegValue sampleIntervalToReg(std::chrono::duration<double> i) {
     int reg = ceil(((i / clockInterval) - minSampleClockDivider) /
-                    sampleClockDividerStep);
+                   sampleClockDividerStep);
     return std::min(std::max(0, reg), 65535);
 }
 
@@ -100,8 +100,8 @@ SerialChannel::SerialChannel(
 
 void SerialChannel::start(InitializedCallback initializedCallback) {
     auto self = shared_from_this();
-    spawn(port_.get_io_service(), [this, self, initializedCallback](
-                                      yield_context yc) {
+    spawn(port_.get_io_service(), [this, self,
+                                   initializedCallback](yield_context yc) {
         // Wait a bit to give the hardware some time to start up, in case the
         // user just switched it on. The UART just stops working if we are to
         // quick (probably related to the FPGA reconfiguration). This is

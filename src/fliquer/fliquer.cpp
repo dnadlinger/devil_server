@@ -144,8 +144,8 @@ void Node::actOnUdpPacket(size_t sizeBytes) {
 
         const auto type = msg.get<0>();
         if (type != msgType) {
-            BOOST_LOG(log_)
-                << "Malformed UDP packet received: Invalid type: " << type;
+            BOOST_LOG(log_) << "Malformed UDP packet received: Invalid type: "
+                            << type;
             return;
         }
 
@@ -170,8 +170,8 @@ void Node::actOnUdpPacket(size_t sizeBytes) {
 
             newRemoteResourceCallback_(std::move(rrs));
         } else {
-            BOOST_LOG(log_)
-                << "Malformed UDP packet received: Unknown method: " << method;
+            BOOST_LOG(log_) << "Malformed UDP packet received: Unknown method: "
+                            << method;
         }
     } catch (msgpack::unpack_error &e) {
         BOOST_LOG(log_) << "Malformed UDP packet received: " << e.what();
@@ -201,8 +201,8 @@ void Node::replyWithLocalResources() {
                                          // stop().
                                          return;
                                      }
-                                     BOOST_LOG(log_)
-                                         << "Failed to send reply: " << err;
+                                     BOOST_LOG(log_) << "Failed to send reply: "
+                                                     << err;
                                  }
                              });
 }

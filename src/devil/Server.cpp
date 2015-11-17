@@ -109,35 +109,35 @@ void Server::registerDevice(const std::string &path,
                             uint8_t versionMinor) {
     BOOST_LOG_TRIVIAL(info) << path << ": Established connection, version "
                             << +versionMajor << '.' << +versionMinor;
-    const auto announce =
-        [&](const ChannelServer &chan, std::string serialExt = "") {
-            auto fullSerial = serial + serialExt;
+    const auto announce = [&](const ChannelServer &chan,
+                              std::string serialExt = "") {
+        auto fullSerial = serial + serialExt;
 
-            fliquer::Resource r;
-            r.type = "tiqi.devil.channel";
-            r.id = fullSerial;
-            r.port = chan.rpcPort();
+        fliquer::Resource r;
+        r.type = "tiqi.devil.channel";
+        r.id = fullSerial;
+        r.port = chan.rpcPort();
 
-            fliquer::SemVer v;
-            v.major = versionMajor;
-            v.minor = versionMinor;
-            r.version = v;
+        fliquer::SemVer v;
+        v.major = versionMajor;
+        v.minor = versionMinor;
+        r.version = v;
 
-            // See if the user has configured a name string for this device.
-            // Otherwise, just reuse the serial string as the display name.
-            const auto nameIt = config_.channelNames.find(fullSerial);
-            if (nameIt == config_.channelNames.end()) {
-                r.displayName = fullSerial;
-            } else {
-                r.displayName = nameIt->second;
-            }
+        // See if the user has configured a name string for this device.
+        // Otherwise, just reuse the serial string as the display name.
+        const auto nameIt = config_.channelNames.find(fullSerial);
+        if (nameIt == config_.channelNames.end()) {
+            r.displayName = fullSerial;
+        } else {
+            r.displayName = nameIt->second;
+        }
 
-            fliquer_->addLocalResource(r);
+        fliquer_->addLocalResource(r);
 
-            auto self = shared_from_this();
-            conn->addShutdownCallback(
-                [this, self, r] { fliquer_->removeLocalResource(r); });
-        };
+        auto self = shared_from_this();
+        conn->addShutdownCallback(
+            [this, self, r] { fliquer_->removeLocalResource(r); });
+    };
 
     if (versionMajor == 1 || versionMajor == 3) {
         auto chan = ChannelServer::make(ioService_, conn);

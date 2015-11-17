@@ -107,15 +107,15 @@ void RpcInterface::nextRequest() {
             sendErrorResponse("Unknown method invoked.");
             return;
         } catch (msgpack::unpack_error &e) {
-            BOOST_LOG_TRIVIAL(info)
-                << "Malformed RPC packet received: " << e.what();
+            BOOST_LOG_TRIVIAL(info) << "Malformed RPC packet received: "
+                                    << e.what();
             sendErrorResponse("Type mismatch.");
             return;
         } catch (std::bad_cast &e) {
             // msgpack throws bad_cast when we receive a valid msgpack object
             // but try to get() it as an mismatched type.
-            BOOST_LOG_TRIVIAL(info)
-                << "Malformed RPC packet received: " << e.what();
+            BOOST_LOG_TRIVIAL(info) << "Malformed RPC packet received: "
+                                    << e.what();
             sendErrorResponse("Type mismatch.");
             return;
         } catch (...) {
