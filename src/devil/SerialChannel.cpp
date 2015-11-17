@@ -212,8 +212,13 @@ void SerialChannel::mainLoop(yield_context yc) {
             if (nextStreamIdx_ < streamCount_) {
                 const auto &cb = streamPacketCallbacks_[nextStreamIdx_];
                 if (cb) {
-                    auto streamResult = readStreamPacket(
-                        nextStreamIdx_, streamConfigs_[nextStreamIdx_], yc);
+                    // Save away the current acquisition config to operate from
+                    // the same one for the whole operation even if it is
+                    // changed by the user concurrently (i.e. while we wait for
+                    // the data to arrive).
+                    auto config = streamConfigs_[nextStreamIdx_];
+                    auto streamResult =
+                        readStreamPacket(nextStreamIdx_, config, yc);
                     if (!streamResult.first) {
                         BOOST_LOG_TRIVIAL(info)
                             << devicePath_
