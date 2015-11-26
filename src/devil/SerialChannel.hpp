@@ -35,9 +35,11 @@ public:
     ///     on this serial connection.
     static std::shared_ptr<SerialChannel>
     make(boost::asio::io_service &ioService, std::string devicePath,
+         RegValue minLongStreamIntervalReg,
          std::shared_ptr<PerformanceCounters> performanceCounters) {
         return std::shared_ptr<SerialChannel>(new SerialChannel(
-            ioService, std::move(devicePath), std::move(performanceCounters)));
+            ioService, std::move(devicePath), minLongStreamIntervalReg,
+            std::move(performanceCounters)));
     }
 
     /// \brief Callback to invoke once the connection has been established.
@@ -81,6 +83,7 @@ public:
 
 private:
     SerialChannel(boost::asio::io_service &ioService, std::string devicePath,
+                  RegValue minLongStreamIntervalReg,
                   std::shared_ptr<PerformanceCounters> performanceCounters);
 
     /// Tries to recover the hardware connection after it was in a weird state.
@@ -115,6 +118,8 @@ private:
     const std::string devicePath_;
 
     boost::asio::serial_port port_;
+
+    const RegValue minLongStreamIntervalReg_;
 
     /// Timeout for the serial communication. Armed and canceled again with
     /// each successful operation.

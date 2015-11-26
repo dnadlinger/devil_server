@@ -68,11 +68,12 @@ const auto sampleClockDividerStep = 512;
 /// of 1 there. This should be fixed by increasing the base divider in the
 /// bitstream.
 RegValue sampleIntervalToReg(std::chrono::duration<double> timeSpan,
-                             unsigned sampleCount) {
+                             unsigned sampleCount,
+                             RegValue minLongStreamIntervalReg) {
     const RegValue reg = ceil(
         ((timeSpan / sampleCount / clockInterval) - minSampleClockDivider) /
         sampleClockDividerStep);
-    const RegValue minReg = (sampleCount > 512) ? 1 : 0;
+    const RegValue minReg = (sampleCount > 512) ? minLongStreamIntervalReg : 0;
     return std::min(std::max(minReg, reg), RegValue(65535));
 }
 
@@ -87,15 +88,16 @@ std::chrono::duration<double> sampleIntervalFromReg(RegValue r) {
 /// The timeout to use when waiting for serial data to arrive (the amount of
 /// time it takes for the hardware samples to be acquired is taken into account
 /// separately).
-const auto readTimeout = 1.0s;
+const auto readTimeout = 3.0s;
 }
 
 SerialChannel::SerialChannel(
     io_service &ioService, std::string devicePath,
+    RegValue minLongStreamIntervalReg,
     std::shared_ptr<PerformanceCounters> performanceCounters)
     : devicePath_{std::move(devicePath)}, port_{ioService, devicePath_},
-      timeout_{ioService}, performanceCounters_{performanceCounters},
-      shuttingDown_{false} {
+      minLongStreamIntervalReg_{minLongStreamIntervalReg}, timeout_{ioService},
+      performanceCounters_{performanceCounters}, shuttingDown_{false} {
     port_.set_option(serial_port::baud_rate(3000000));
     port_.set_option(serial_port::character_size(8));
     port_.set_option(serial_port::stop_bits(serial_port::stop_bits::one));
@@ -118,7 +120,7 @@ void SerialChannel::start(InitializedCallback initializedCallback) {
         // testing, where hot-plugging basically does not work at all without
         // the delay.
 
-        timeout_.expires_from_now(1s);
+        timeout_.expires_from_now(3s);
         timeout_.async_wait(yc);
 
         try {
@@ -176,7 +178,7 @@ void SerialChannel::realignProtocol(yield_context yc) {
 
     // Now, read any garbage the device might send in response. We'll keep
     // trying to read until the timeout is hit.
-    armTimeout(5 * readTimeout);
+    armTimeout(2 * readTimeout);
     std::array<uint8_t, 1024> garbage;
     try {
         while (true) {
@@ -225,7 +227,8 @@ void SerialChannel::mainLoop(yield_context yc) {
                     // the same one for the whole operation even if it is
                     // changed by the user concurrently (i.e. while we wait for
                     // the data to arrive).
-                    auto config = streamConfigs_[nextStreamIdx_];
+                    StreamAcquisitionConfig config =
+                        streamConfigs_[nextStreamIdx_];
                     auto streamResult =
                         readStreamPacket(nextStreamIdx_, config, yc);
                     if (!streamResult.first) {
@@ -357,8 +360,8 @@ std::pair<bool, StreamPacket> SerialChannel::readStreamPacket(
     }
 
     auto &intervalCache = registerCache_[hw::special_regs::streamInterval];
-    const auto intervalReg =
-        hw::sampleIntervalToReg(config.timeSpan, config.sampleCount);
+    const auto intervalReg = hw::sampleIntervalToReg(
+        config.timeSpan, config.sampleCount, minLongStreamIntervalReg_);
     if (intervalCache != intervalReg) {
         intervalCache = intervalReg;
         writeRegister(hw::special_regs::streamInterval, intervalCache, yc);

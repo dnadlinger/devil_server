@@ -41,8 +41,9 @@ Server::Server(io_service &ioService, Server::Config config)
               BOOST_LOG_TRIVIAL(info) << path << ": EVIL connected, serial '"
                                       << serial << "'";
 
-              auto conn =
-                  SerialChannel::make(ioService_, path, performanceCounters_);
+              auto conn = SerialChannel::make(ioService_, path,
+                                              config_.minLongStreamIntervalReg,
+                                              performanceCounters_);
               activeDevices_.push_back(conn);
 
               // Remove the connection from the list when it shuts down so the

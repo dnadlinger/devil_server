@@ -32,6 +32,10 @@ public:
 
         /// \brief Map from hardware resource ids to channel names.
         std::unordered_map<std::string, std::string> channelNames;
+
+        /// \brief The minimum hardware streaming interval register for packets
+        /// longer than 512 samples (to avoid serial communication glitches).
+        RegValue minLongStreamIntervalReg;
     };
 
     using ChannelNameMap = std::unordered_map<std::string, std::string>;

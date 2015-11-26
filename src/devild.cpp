@@ -12,6 +12,7 @@
 #include "boost/asio/signal_set.hpp"
 #include "boost/filesystem.hpp"
 #include "boost/log/trivial.hpp"
+#include "boost/optional/optional.hpp"
 #include "boost/property_tree/ptree.hpp"
 #include "boost/property_tree/json_parser.hpp"
 #include "devil/Server.hpp"
@@ -45,8 +46,11 @@ devil::Server::Config readConfig() {
         channelNames[id.first] = id.second.data();
     }
 
+    const devil::RegValue minLongStreamIntervalReg =
+        tree.get("minLongStreamIntervalReg", devil::RegValue(2));
+
     return {std::move(serverId), std::move(serverDisplayName),
-            std::move(channelNames)};
+            std::move(channelNames), minLongStreamIntervalReg};
 }
 }
 
