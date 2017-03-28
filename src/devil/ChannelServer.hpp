@@ -85,6 +85,8 @@ private:
     /// callback if it was the last one.
     void removeStreamSubscription(StreamIdx idx);
 
+    void updateStreamDutyCycles();
+
     boost::asio::io_service &ioService_;
 
     /// The controller channel exposed to clients.

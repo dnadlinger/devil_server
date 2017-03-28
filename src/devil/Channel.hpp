@@ -36,10 +36,7 @@ using StreamSample = uint8_t;
 /// acquisition.
 struct StreamAcquisitionConfig {
     StreamAcquisitionConfig()
-        : timeSpan{std::chrono::milliseconds(10)}, sampleCount(512) {}
-    StreamAcquisitionConfig(std::chrono::duration<double> timeSpan,
-                            unsigned sampleCount)
-        : timeSpan{timeSpan}, sampleCount{sampleCount} {}
+        : timeSpan{std::chrono::milliseconds(10)} {}
 
     /// \brief The minimum time span over which to acquire samples.
     ///
@@ -52,7 +49,15 @@ struct StreamAcquisitionConfig {
     ///
     /// In contrast to timeSpan, the actual number of samples acquired will
     /// always precisely match this.
-    unsigned sampleCount;
+    unsigned sampleCount = 512;
+
+    /// \brief The denominator of the duty cycle this stream should be acquired
+    /// on relative to the other streams on the same hardware channel.
+    ///
+    /// By default, all channels are polled in a round-robin fashion. If now one
+    /// channel is configured with dutyCycle == 2, it is only updated at every
+    /// second iteration through the list of active streams.
+    unsigned dutyCycle = 1;
 };
 
 /// \brief A packet of stream data, as received from the hardware.

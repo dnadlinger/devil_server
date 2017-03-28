@@ -171,7 +171,7 @@ void Server::announceSelf() {
     r.port = managementInterface_->port();
 
     r.version.major = 1;
-    r.version.minor = 0;
+    r.version.minor = 2;
     r.version.buildMetadata = buildTimestamp();
 
     fliquer_->addLocalResource(r);

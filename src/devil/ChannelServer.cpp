@@ -170,8 +170,10 @@ bool ChannelServer::processRpcCommand(const std::string &method,
         std::tie(timeSpanSeconds, sampleCount) =
             params.as<msgpack::type::tuple<double, unsigned>>();
 
-        StreamAcquisitionConfig config{timeSpanSeconds * 1s, sampleCount};
         for (StreamIdx i = 0; i < hw_->streamCount(); ++i) {
+            auto config = hw_->streamAcquisitionConfig(i);
+            config.timeSpan = timeSpanSeconds * 1s;
+            config.sampleCount = sampleCount;
             hw_->setStreamAcquisitionConfig(i, config);
         }
 
@@ -305,6 +307,8 @@ void ChannelServer::addStreamSubscription(StreamIdx idx) {
                 sendStreamPacket(idx, packet);
             });
     }
+
+    updateStreamDutyCycles();
 }
 
 void ChannelServer::removeStreamSubscription(StreamIdx idx) {
@@ -315,6 +319,29 @@ void ChannelServer::removeStreamSubscription(StreamIdx idx) {
     // hardware polling can be stopped.
     if (count == 0) {
         hw_->setStreamPacketCallback(idx, nullptr);
+    }
+
+    updateStreamDutyCycles();
+}
+
+void ChannelServer::updateStreamDutyCycles() {
+    const auto maxSubs = *std::max_element(streamingSubscriberCounts_.begin(),
+                                           streamingSubscriberCounts_.end());
+    // If there are multiple subscribers for at least some of the channels, only
+    // update the ones with one subscriber a fraction of the time. This is a
+    // heuristic to deal with a single logging client per network that logs e.g.
+    // error signal and output, while the user is only interested in one of them
+    // during manual setup. If using a long acquisition time span for a slow
+    // controlled device, streaming both at the same rate would lead to
+    // undesirable lag. Ideally, the type of client should be indicated somehow
+    // in the stream subscription, but as the subscription is currently simply
+    // established by opening a connection to the streaming port, this is the
+    // best we can do for now.
+    for (size_t i = 0; i < streamingSubscriberCounts_.size(); ++i) {
+        auto config = hw_->streamAcquisitionConfig(i);
+        config.dutyCycle =
+            (maxSubs > 1 && streamingSubscriberCounts_[i] == 1) ? 8 : 1;
+        hw_->setStreamAcquisitionConfig(i, config);
     }
 }
 }

@@ -152,14 +152,6 @@ private:
     /// Register write commands as
     std::deque<std::pair<RegIdx, RegValue>> pendingRegisterWrites_;
 
-    /// The index of the next register in hw::regsToPoll to poll in the main
-    /// loop. Equal to hw::regsToPoll.size() if we are done for this iteration.
-    size_t nextRegPollIdx_;
-
-    /// The index of the next stream to query in the main loop. Equal to
-    /// streamCount_ if we are done for this iteration.
-    size_t nextStreamIdx_;
-
     /// Buffer to receive stream samples into.
     std::vector<StreamSample> streamBuf_;
 };

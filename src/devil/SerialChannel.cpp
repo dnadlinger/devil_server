@@ -104,9 +104,6 @@ SerialChannel::SerialChannel(
     port_.set_option(serial_port::parity(serial_port::parity::none));
     port_.set_option(
         serial_port::flow_control(serial_port::flow_control::none));
-
-    nextRegPollIdx_ = 0;
-    nextStreamIdx_ = 0;
 }
 
 void SerialChannel::start(InitializedCallback initializedCallback) {
@@ -191,6 +188,19 @@ void SerialChannel::realignProtocol(yield_context yc) {
 }
 
 void SerialChannel::mainLoop(yield_context yc) {
+    // The index of the next register in hw::regsToPoll to poll. Equal to
+    // hw::regsToPoll.size() if we are done for this iteration.
+    size_t nextRegPollIdx = 0;
+
+    // The index of the next stream to query. Equal to streamCount_ if we are
+    // done for this iteration.
+    size_t nextStreamIdx = 0;
+
+    // The number of iterations through all the active streaming channels. Only
+    // used to implement the different possible duty cycles; wrap-around is
+    // inconsequential.
+    unsigned streamCycleIdx = 0;
+
     while (!shuttingDown_) {
         try {
             while (!pendingRegisterWrites_.empty()) {
@@ -203,8 +213,8 @@ void SerialChannel::mainLoop(yield_context yc) {
                 writeRegister(idx, value, yc);
             }
 
-            if (nextRegPollIdx_ < hw::regsToPoll.size()) {
-                const auto idx = hw::regsToPoll[nextRegPollIdx_];
+            if (nextRegPollIdx < hw::regsToPoll.size()) {
+                const auto idx = hw::regsToPoll[nextRegPollIdx];
 
                 const auto newVal = readRegister(idx, yc);
                 if (registerCache_[idx] != newVal) {
@@ -216,21 +226,20 @@ void SerialChannel::mainLoop(yield_context yc) {
 
                 // Before reading the next register, check if there are pending
                 // register writes to keep control latency as low as possible.
-                ++nextRegPollIdx_;
+                ++nextRegPollIdx;
                 continue;
             }
 
-            if (nextStreamIdx_ < streamCount_) {
-                const auto &cb = streamPacketCallbacks_[nextStreamIdx_];
-                if (cb) {
-                    // Save away the current acquisition config to operate from
-                    // the same one for the whole operation even if it is
-                    // changed by the user concurrently (i.e. while we wait for
-                    // the data to arrive).
-                    StreamAcquisitionConfig config =
-                        streamConfigs_[nextStreamIdx_];
+            if (nextStreamIdx < streamCount_) {
+                // Save away the current acquisition config to operate from the
+                // same one for the whole operation even if it is changed by the
+                // user concurrently (i.e. while we wait for the data to
+                // arrive).
+                const auto config = streamConfigs_[nextStreamIdx];
+                const auto &cb = streamPacketCallbacks_[nextStreamIdx];
+                if (cb && !(streamCycleIdx % config.dutyCycle)) {
                     auto streamResult =
-                        readStreamPacket(nextStreamIdx_, config, yc);
+                        readStreamPacket(nextStreamIdx, config, yc);
                     if (!streamResult.first) {
                         BOOST_LOG_TRIVIAL(info)
                             << devicePath_
@@ -249,12 +258,13 @@ void SerialChannel::mainLoop(yield_context yc) {
                 // Before acquiring the next stream packet, check if there are
                 // pending register writes to keep control latency as low as
                 // possible.
-                ++nextStreamIdx_;
+                ++nextStreamIdx;
                 continue;
             }
 
-            nextRegPollIdx_ = 0;
-            nextStreamIdx_ = 0;
+            nextRegPollIdx = 0;
+            nextStreamIdx = 0;
+            ++streamCycleIdx;
         } catch (system_error &err) {
             if (err.code() != errc::operation_canceled) throw err;
 
